@@ -13,7 +13,7 @@
 window.GS_CONFIG = {
   SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwAi5F8yfnaKj2SXmclqfCNRbwfQPwDToDO3Zt_Rdj-3wwheUcB56fIcXj0KEqahZGCoA/exec',
   SECRET_TOKEN: 'khazanati2026',
-  POLL_INTERVAL: 30000
+  POLL_INTERVAL: 15000
 };
 
 // حفظ إلى Google Sheets
@@ -1519,7 +1519,16 @@ function loadData() {
           if (!data[id]) data[id] = { prevMonth: raw.prevMonth, rows: [...raw.rows] };
         }
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        window._lastSyncTime = Date.now();
         render();
+        // في وضع المشاهدة: العودة لليوم تلقائياً عند تحديث البيانات
+        if (window.VIEW_ONLY) {
+          const today = todayStr();
+          if (selectedDate !== today) {
+            selectedDate = today;
+            render();
+          }
+        }
       });
     } else {
       // انتظر حتى يصبح Firebase جاهزاً
@@ -1705,16 +1714,22 @@ function render() {
 function renderHeader() {
   document.getElementById('hdr-date').textContent = fmtDate(selectedDate) + ' | ' + arDay(selectedDate);
   updatePageTitle();
-  // مؤشر حالة المزامنة
+  // مؤشر حالة المزامنة + آخر تحديث
   let syncEl = document.getElementById('sync-status');
   if (!syncEl) {
     syncEl = document.createElement('div');
     syncEl.id = 'sync-status';
-    syncEl.style.cssText = 'position:fixed;bottom:16px;left:16px;background:#1a2235;border:1px solid rgba(100,150,255,0.2);border-radius:20px;padding:6px 14px;font-size:12px;color:#8ba0c0;z-index:9999;font-family:Tajawal,sans-serif;';
-    syncEl.textContent = window._firebaseReady ? '☁️ متصل بـ Google Sheets' : '⏳ جارٍ الاتصال بـ Google Sheets...';
+    syncEl.style.cssText = 'position:fixed;bottom:16px;left:16px;background:#1a2235;border:1px solid rgba(100,150,255,0.2);border-radius:20px;padding:8px 16px;font-size:12px;color:#8ba0c0;z-index:9999;font-family:Tajawal,sans-serif;display:flex;align-items:center;gap:8px;';
     document.body.appendChild(syncEl);
-    window.addEventListener('firebaseReady', () => { syncEl.textContent = '☁️ متصل بـ Google Sheets'; syncEl.style.color = '#20d070'; });
   }
+  const lastSync = window._lastSyncTime ? new Date(window._lastSyncTime).toLocaleTimeString('ar-IQ') : '—';
+  const isConnected = window._firebaseReady;
+  syncEl.innerHTML = isConnected
+    ? '<span style="width:8px;height:8px;border-radius:50%;background:#20d070;animation:pulse 2s infinite;"></span> متصل | آخر تحديث: ' + lastSync
+    : '<span style="width:8px;height:8px;border-radius:50%;background:#f0b830;animation:pulse 1s infinite;"></span> جارٍ الاتصال...';
+  syncEl.style.color = isConnected ? '#20d070' : '#f0b830';
+  syncEl.style.borderColor = isConnected ? 'rgba(32,208,112,0.3)' : 'rgba(240,184,48,0.3)';
+  window.addEventListener('firebaseReady', () => { renderHeader(); });
 }
 
 function renderTabs() {
@@ -2308,6 +2323,29 @@ body.view-only-mode select,
 body.view-only-mode textarea {
   pointer-events: none !important;
   opacity: 0.8;
+}
+
+/* ── وضع المشاهدة: تحسينات إضافية ── */
+body.view-only-mode .hdr {
+  margin-bottom: 20px;
+}
+body.view-only-mode .hdr-date {
+  background: rgba(32,208,112,0.1) !important;
+  border-color: rgba(32,208,112,0.3) !important;
+  color: #20d070 !important;
+}
+body.view-only-mode .factory-panel {
+  border-color: rgba(32,208,112,0.15);
+}
+body.view-only-mode .factory-panel:hover {
+  border-color: rgba(32,208,112,0.3);
+  box-shadow: 0 4px 24px rgba(32,208,112,0.1);
+}
+body.view-only-mode .sum-card {
+  border-color: rgba(32,208,112,0.15);
+}
+body.view-only-mode .sum-card:hover {
+  transform: translateY(-2px);
 }
 </style>
 </head>
@@ -3133,6 +3171,9 @@ window.addEventListener('DOMContentLoaded', () => {
     // ── وضع المشاهدة: إخفاء كل شيء فوراً ──
     document.body.classList.add('view-only-mode');
 
+    // العودة لليوم تلقائياً
+    selectedDate = todayStr();
+
     // إغلاق أي نافذة مفتوحة
     ['lock-screen','pass-modal','factories-modal','month-modal',
      'opening-modal','edit-title-modal','recovery-modal','set-recovery-modal']
@@ -3161,11 +3202,22 @@ window.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.fp-header .nav-btn').forEach(b => b.style.display = 'none');
     }, 200);
 
-    // شارة "مشاهدة فقط"
+    // شارة "مشاهدة فقط" + معلومات التحديث
     const badge = document.createElement('div');
-    badge.style.cssText = 'position:fixed;top:12px;left:12px;background:rgba(255,160,0,0.15);border:1px solid rgba(255,160,0,0.4);border-radius:20px;padding:5px 14px;font-size:13px;color:#ffb020;z-index:9998;font-family:Tajawal,sans-serif;pointer-events:none;';
-    badge.textContent = '👁️ مشاهدة فقط';
+    badge.id = 'view-only-badge';
+    badge.style.cssText = 'position:fixed;top:12px;left:12px;background:rgba(32,208,112,0.12);border:1px solid rgba(32,208,112,0.35);border-radius:20px;padding:6px 16px;font-size:13px;color:#20d070;z-index:9998;font-family:Tajawal,sans-serif;display:flex;align-items:center;gap:8px;';
+    badge.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#20d070;animation:pulse 2s infinite;"></span> مشاهدة فقط — تحديث تلقائي';
     document.body.appendChild(badge);
+
+    // زر العودة لليوم (مرئي دائماً في وضع المشاهدة)
+    const todayBtn = document.createElement('button');
+    todayBtn.id = 'view-today-btn';
+    todayBtn.style.cssText = 'position:fixed;top:12px;right:12px;background:rgba(32,96,208,0.2);border:1px solid rgba(61,142,240,0.5);border-radius:20px;padding:6px 16px;font-size:13px;color:#3d8ef0;z-index:9998;font-family:Tajawal,sans-serif;cursor:pointer;transition:all 0.2s;';
+    todayBtn.textContent = '📅 اليوم';
+    todayBtn.onmouseover = function() { this.style.background = 'rgba(32,96,208,0.35)'; };
+    todayBtn.onmouseout = function() { this.style.background = 'rgba(32,96,208,0.2)'; };
+    todayBtn.onclick = function() { selectedDate = todayStr(); render(); };
+    document.body.appendChild(todayBtn);
 
   } else {
     // وضع المشرف - يحتاج رمز السر
