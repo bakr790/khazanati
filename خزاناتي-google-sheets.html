@@ -8,42 +8,87 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<!-- نظام التخزين المحلي الدائم -->
+<!-- Google Sheets Bridge -->
 <script>
-// ══════════════════════════════════════════════════════
-// نظام المزامنة عبر Google Sheets Apps Script
-// ══════════════════════════════════════════════════════
 window.GS_CONFIG = {
-  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzSSN0BWgp7MI60T9U7YJ9CKJebAU0gPwOW-KbnTPwn6kkG8INJ8WOu7UQa71kTu0rU1Q/exec',
+  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwAi5F8yfnaKj2SXmclqfCNRbwfQPwDToDO3Zt_Rdj-3wwheUcB56fIcXj0KEqahZGCoA/exec',
   SECRET_TOKEN: 'khazanati2026',
-  POLL_INTERVAL: 60000
+  POLL_INTERVAL: 30000
 };
 
-// حفظ البيانات — يحاول GS أولاً، يحفظ محلياً دائماً
+// حفظ إلى Google Sheets
 window._fbSave = async function(key, value) {
-  // البيانات محفوظة محلياً دائماً (يتم في saveData)
-  // محاولة إرسال لـ GS في الخلفية بدون انتظار
-  if (window.GS_CONFIG.SCRIPT_URL && !window.GS_CONFIG.SCRIPT_URL.includes('YOUR_')) {
+  try {
+    const action = key === 'data' ? 'saveData' : 'saveMeta';
+    const body = action === 'saveData'
+      ? { action, token: window.GS_CONFIG.SECRET_TOKEN, data: value }
+      : { action, token: window.GS_CONFIG.SECRET_TOKEN, meta: { [key]: JSON.stringify(value) } };
+    
+    // استخدام fetch مع mode: 'no-cors' لتجاوز CORS
+    // لكن لقراءة الرد نحتاج طريقة مختلفة — نستخدم iframe trick
+    const url = window.GS_CONFIG.SCRIPT_URL;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body)
+    });
+    if (response.ok) {
+      console.log('✅ GS saved:', key);
+    }
+  } catch(e) {
+    // محاولة بديلة بدون CORS check
     try {
-      const body = key === 'data'
-        ? { action: 'saveData', token: window.GS_CONFIG.SECRET_TOKEN, data: value }
-        : { action: 'saveMeta', token: window.GS_CONFIG.SECRET_TOKEN, meta: { [key]: JSON.stringify(value) } };
+      const formData = new FormData();
+      formData.append('data', JSON.stringify({
+        action: key === 'data' ? 'saveData' : 'saveMeta',
+        token: window.GS_CONFIG.SECRET_TOKEN,
+        ...(key === 'data' ? { data: value } : { meta: { [key]: JSON.stringify(value) } })
+      }));
       fetch(window.GS_CONFIG.SCRIPT_URL, {
         method: 'POST',
-        mode: 'no-cors', // تجاوز CORS — لا نحتاج الرد
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(body)
-      }).catch(() => {}); // تجاهل أي خطأ
-    } catch(e) {}
+        mode: 'no-cors',
+        body: formData
+      }).catch(() => {});
+    } catch(e2) {}
   }
 };
 
-// قراءة البيانات — من localStorage أولاً دائماً
-window._fbGet = async function(key) { return null; }; // لا نقرأ من GS
+// قراءة من Google Sheets
+window._fbGet = async function(key) {
+  try {
+    const action = key === 'data' ? 'getData' : 'getMeta';
+    const res = await fetch(window.GS_CONFIG.SCRIPT_URL + '?action=' + action + '&t=' + Date.now());
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!json || typeof json !== 'object') return null;
+    if (key === 'data') {
+      // تحقق أن البيانات ليست فارغة
+      if (Object.keys(json).length === 0) return null;
+      const hasData = Object.values(json).some(f => 
+        f && (f.prevMonth > 0 || (f.rows && f.rows.some(r => r.qty_in > 0 || r.qty_out > 0)))
+      );
+      if (!hasData) return null;
+      return json;
+    }
+    return json[key] ? JSON.parse(json[key]) : null;
+  } catch(e) { return null; }
+};
 
-// لا مزامنة تلقائية — البيانات المحلية هي المصدر الوحيد
+// مزامنة تلقائية
+let _gsListeners = {};
 window._fbListen = function(key, callback) {
-  // لا نستدعي callback من GS لتجنب مسح البيانات المحلية
+  _gsListeners[key] = callback;
+  // قراءة أولى فورية
+  window._fbGet(key).then(val => { if (val) callback(val); });
+  // تحديث دوري
+  if (!window._gsPollTimer) {
+    window._gsPollTimer = setInterval(async () => {
+      for (const [k, cb] of Object.entries(_gsListeners)) {
+        const val = await window._fbGet(k);
+        if (val) cb(val);
+      }
+    }, window.GS_CONFIG.POLL_INTERVAL);
+  }
 };
 
 window._firebaseReady = true;
@@ -739,7 +784,6 @@ table.daily-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   <button class="btn-export" style="background:rgba(61,180,240,0.15);border-color:rgba(61,180,240,0.4);color:#3db4f0;" onclick="openManageFactoriesModal()">🏭 إدارة المعامل</button>
   <button class="btn-export" style="background:rgba(180,40,180,0.15);border-color:rgba(200,60,200,0.4);color:#e060e0;" onclick="openChangePassModal()">🔐 رمز السر</button>
   <button class="btn-export" style="background:rgba(240,184,48,0.12);border-color:rgba(240,184,48,0.35);color:#f0b830;" onclick="openSetRecoveryModal()">🔑 رمز الاسترداد</button>
-  <button class="btn-export" style="background:rgba(32,208,112,0.2);border-color:rgba(32,208,112,0.5);color:#20d070;font-size:15px;" onclick="shareDataWithFriends()">🔗 تحديث رابط الأصدقاء</button>
 </div>
 
 </div><!-- /app -->
@@ -1460,8 +1504,31 @@ function loadData() {
   }
 
   // ثم الاستماع لـ Firebase للمزامنة الفورية
-  // ── المزامنة التلقائية معطلة — localStorage هو المصدر الوحيد ──
-  // البيانات محفوظة دائماً ولا تُمسح
+  function setupFirebaseSync() {
+    if (window._fbListen) {
+      window._fbListen('data', function(fbData) {
+        if (!fbData || typeof fbData !== 'object') return;
+        if (Object.keys(fbData).length === 0) return; // فارغ
+        // تحقق أن البيانات تحتوي أرقام حقيقية
+        const hasReal = Object.values(fbData).some(f =>
+          f && (f.prevMonth > 0 || (f.rows && f.rows.some(r => r.qty_in > 0 || r.qty_out > 0)))
+        );
+        if (!hasReal) return;
+        data = fbData;
+        for (const [id, raw] of Object.entries(RAW_DATA)) {
+          if (!data[id]) data[id] = { prevMonth: raw.prevMonth, rows: [...raw.rows] };
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        render();
+      });
+    } else {
+      // انتظر حتى يصبح Firebase جاهزاً
+      window.addEventListener('firebaseReady', function() {
+        setupFirebaseSync();
+      }, { once: true });
+    }
+  }
+  setupFirebaseSync();
 }
 
 function initData() {
@@ -3050,59 +3117,6 @@ function updatePageTitle() {
 // ════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════
-
-// ════════════════════════════════════════════════
-// مشاركة البيانات مع الأصدقاء عبر رابط
-// ════════════════════════════════════════════════
-function shareDataWithFriends() {
-  try {
-    const dataStr = JSON.stringify(data);
-    const encoded = btoa(encodeURIComponent(dataStr));
-    const baseUrl = window.location.href.split('?')[0].split('#')[0];
-    const shareUrl = baseUrl + '?view=1#data=' + encoded;
-    
-    // نسخ الرابط للحافظة
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(shareUrl).then(() => {
-        showToast('✅ تم نسخ رابط الأصدقاء! أرسله لهم الآن', 'success');
-      });
-    } else {
-      const ta = document.createElement('textarea');
-      ta.value = shareUrl;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      showToast('✅ تم نسخ رابط الأصدقاء! أرسله لهم الآن', 'success');
-    }
-  } catch(e) {
-    showToast('❌ خطأ في إنشاء الرابط', 'error');
-  }
-}
-
-// تحميل البيانات من الرابط (لوضع المشاهدة)
-function loadDataFromURL() {
-  try {
-    const hash = window.location.hash;
-    if (hash && hash.includes('#data=')) {
-      const encoded = hash.split('#data=')[1];
-      if (encoded) {
-        const decoded = JSON.parse(decodeURIComponent(atob(encoded)));
-        if (decoded && typeof decoded === 'object' && Object.keys(decoded).length > 0) {
-          data = decoded;
-          for (const [id, raw] of Object.entries(RAW_DATA)) {
-            if (!data[id]) {
-              data[id] = { prevMonth: raw.prevMonth, rows: [...raw.rows] };
-            }
-          }
-          return true;
-        }
-      }
-    }
-  } catch(e) {}
-  return false;
-}
-
 window.addEventListener('DOMContentLoaded', () => {
   loadFactories();
   loadData();
@@ -3116,10 +3130,7 @@ window.addEventListener('DOMContentLoaded', () => {
   window.VIEW_ONLY = urlParams.get('view') === '1';
 
   if (window.VIEW_ONLY) {
-    // ── وضع المشاهدة: تحميل البيانات من الرابط أولاً ──
-    const loadedFromURL = loadDataFromURL();
-    if (loadedFromURL) { render(); } // إعادة رسم بالبيانات الجديدة
-    
+    // ── وضع المشاهدة: إخفاء كل شيء فوراً ──
     document.body.classList.add('view-only-mode');
 
     // إغلاق أي نافذة مفتوحة
