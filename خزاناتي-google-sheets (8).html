@@ -1,0 +1,3158 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title id="page-title">خزاناتي — نظام متابعة الخزانات</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- نظام التخزين السحابي JSONBin -->
+<script>
+const BIN_ID_KEY = 'khazanati_bin_id';
+const FIXED_BIN_ID = '6a3165fbf5f4af5e29fbcb81';
+const JSONBIN_MASTER = '$2a$10$yaZyK2npusDuKPWQFGaxdur5.NLN.FQnWbnvZym7MIyhoKK66qkRO';
+
+async function cloudSave(dataObj) {
+  const binId = FIXED_BIN_ID;
+  localStorage.setItem(BIN_ID_KEY, binId);
+  try {
+    const res = await fetch('https://api.jsonbin.io/v3/b/' + binId, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': JSONBIN_MASTER
+      },
+      body: JSON.stringify(dataObj)
+    });
+    const j = await res.json();
+    console.log('✅ Saved to JSONBin:', binId);
+  } catch(e) { console.warn('cloud save error', e); }
+}
+
+async function cloudRead() {
+  const binId = FIXED_BIN_ID;
+  try {
+    const res = await fetch('https://api.jsonbin.io/v3/b/' + binId + '/latest', {
+      headers: { 'X-Master-Key': JSONBIN_MASTER }
+    });
+    const j = await res.json();
+    if (j.record && Object.keys(j.record).length > 0) return j.record;
+  } catch(e) { console.warn('cloud read error', e); }
+  return null;
+}
+
+window._fbSave = async function(key, value) { if (key === 'data') await cloudSave(value); };
+window._fbGet = async function(key) { if (key === 'data') return await cloudRead(); return null; };
+
+let _ls = {};
+window._fbListen = function(key, cb) {
+  _ls[key] = cb;
+  window._fbGet(key).then(v => { if (v) cb(v); });
+  if (!window._pt) {
+    window._pt = setInterval(async () => {
+      for (const [k, c] of Object.entries(_ls)) {
+        const v = await window._fbGet(k);
+        if (v) c(v);
+      }
+    }, 30000);
+  }
+};
+
+window._firebaseReady = true;
+window.dispatchEvent(new Event('firebaseReady'));
+</script>
+
+<style>
+:root {
+  --bg: #080c12;
+  --surface: #0f1520;
+  --surface2: #141c28;
+  --surface3: #1a2235;
+  --border: rgba(100,150,255,0.08);
+  --border2: rgba(100,150,255,0.14);
+  --text: #dce8ff;
+  --muted: #5a7090;
+  --muted2: #8ba0c0;
+  --blue: #2060d0;
+  --blue2: #3d8ef0;
+  --blue-glow: rgba(48,120,220,0.25);
+  --orange: #c05820;
+  --orange2: #f07030;
+  --orange-glow: rgba(200,90,40,0.25);
+  --green: #10a050;
+  --green2: #20d070;
+  --green-glow: rgba(16,160,80,0.25);
+  --gold: #c09020;
+  --gold2: #f0b830;
+  --red: #d03030;
+  --red2: #f05050;
+  --shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Tajawal', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 15% 15%, rgba(32,80,180,0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 35% at 85% 85%, rgba(16,120,64,0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 50% 50%, rgba(200,150,20,0.04) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 24px 20px 80px; }
+
+/* ── HEADER ─────────────────────────────────────────────── */
+.hdr {
+  text-align: center;
+  margin-bottom: 28px;
+  padding: 32px 24px 28px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.hdr::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--blue2), var(--gold2), var(--green2));
+}
+.hdr-top { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 10px; }
+.hdr-icon { font-size: 44px; filter: drop-shadow(0 0 16px rgba(240,184,48,0.5)); }
+.hdr h1 { font-size: 28px; font-weight: 900; letter-spacing: -0.5px; color: var(--text); }
+.hdr-sub { font-size: 13px; color: var(--muted2); margin-top: 4px; }
+.hdr-date { margin-top: 12px; font-size: 13px; color: var(--muted); background: rgba(255,255,255,0.04); display: inline-block; padding: 4px 16px; border-radius: 20px; border: 1px solid var(--border); }
+
+/* ── TABS ─────────────────────────────────────────────── */
+.tabs-wrap { display: flex; gap: 8px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 4px; }
+.tab-btn {
+  flex-shrink: 0;
+  padding: 9px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--muted2);
+  font-family: 'Tajawal', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tab-btn:hover { border-color: var(--border2); color: var(--text); }
+.tab-btn.active { background: var(--blue); border-color: var(--blue2); color: #fff; box-shadow: 0 0 20px var(--blue-glow); }
+
+/* ── DATE SELECTOR ─────────────────────────────────────── */
+.date-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  padding: 14px 20px;
+  margin-bottom: 20px;
+}
+.date-nav h2 { font-size: 17px; font-weight: 700; color: var(--text); }
+.date-nav-btns { display: flex; gap: 8px; align-items: center; }
+.nav-btn {
+  padding: 6px 14px;
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  color: var(--muted2);
+  font-family: 'Tajawal', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.nav-btn:hover { background: var(--surface2); color: var(--text); border-color: var(--blue2); }
+.nav-btn.today { background: rgba(32,96,208,0.2); border-color: rgba(61,142,240,0.5); color: var(--blue2); }
+.date-input {
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: 'Tajawal', sans-serif;
+  font-size: 13px;
+  padding: 6px 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.date-input:focus { border-color: var(--blue2); }
+
+/* ── SUMMARY CARDS ─────────────────────────────────────── */
+.summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+.sum-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 20px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.sum-card:hover { transform: translateY(-2px); }
+.sum-card.blue { border-color: rgba(61,142,240,0.25); }
+.sum-card.blue::before { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--blue2), transparent); }
+.sum-card.orange { border-color: rgba(240,112,48,0.25); }
+.sum-card.orange::before { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--orange2), transparent); }
+.sum-card.green { border-color: rgba(32,208,112,0.25); }
+.sum-card.green::before { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--green2), transparent); }
+.sum-label { font-size: 12px; color: var(--muted2); margin-bottom: 6px; }
+.sum-val { font-size: 22px; font-weight: 800; }
+.sum-card.blue .sum-val { color: var(--blue2); }
+.sum-card.orange .sum-val { color: var(--orange2); }
+.sum-card.green .sum-val { color: var(--green2); }
+.sum-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* ── FACTORY PANEL ─────────────────────────────────────── */
+.factory-panel {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 22px;
+  margin-bottom: 24px;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.factory-panel:hover { box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
+
+.fp-header {
+  padding: 16px 22px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+.fp-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 8px currentColor; }
+.fp-name { font-size: 18px; font-weight: 800; flex: 1; }
+.fp-month { font-size: 12px; color: var(--muted2); background: rgba(255,255,255,0.05); padding: 3px 12px; border-radius: 20px; border: 1px solid var(--border); }
+.fp-status { font-size: 12px; padding: 4px 12px; border-radius: 20px; font-weight: 600; }
+.fp-status.ok { background: rgba(32,208,112,0.12); color: var(--green2); border: 1px solid rgba(32,208,112,0.3); }
+.fp-status.warn { background: rgba(240,184,48,0.12); color: var(--gold2); border: 1px solid rgba(240,184,48,0.3); }
+.fp-status.danger { background: rgba(208,48,48,0.12); color: var(--red2); border: 1px solid rgba(208,48,48,0.3); }
+.fp-toggle { font-size: 16px; color: var(--muted); transition: transform 0.3s; }
+.fp-toggle.open { transform: rotate(180deg); }
+
+/* ── TANKS ROW ─────────────────────────────────────────── */
+.tanks-row { display: grid; grid-template-columns: repeat(3, 1fr); }
+.tank-col {
+  padding: 24px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  border-left: 1px solid var(--border);
+  position: relative;
+}
+.tank-col:last-child { border-left: none; }
+.tank-lbl { font-size: 13px; font-weight: 600; color: var(--muted2); }
+
+/* ── REALISTIC TANK SVG ─────────────────────────────────── */
+.tank-wrap { position: relative; }
+
+/* ── TANK DATA ─────────────────────────────────────────── */
+.tank-qty { font-size: 16px; font-weight: 800; text-align: center; line-height: 1.2; }
+.tank-cars-row {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 13px;
+  background: rgba(255,255,255,0.04);
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  color: var(--muted2);
+}
+.tank-cars-num { font-weight: 700; color: var(--text); font-size: 14px; }
+.tank-pct-bar { width: 100%; height: 4px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
+.tank-pct-fill { height: 100%; border-radius: 4px; transition: width 0.8s cubic-bezier(0.22,1,0.36,1); }
+
+/* ── ENTRY PANEL ─────────────────────────────────────────── */
+.entry-panel { display: none; background: var(--surface2); border-top: 1px solid var(--border); padding: 22px 24px; }
+.entry-panel.open { display: block; }
+.entry-title { font-size: 14px; font-weight: 700; color: var(--gold2); margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+.entry-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.entry-col-hdr { font-size: 12px; font-weight: 700; text-align: center; padding: 6px 0; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.entry-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.entry-row label { font-size: 11px; color: var(--muted2); }
+.entry-input {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border2);
+  border-radius: 9px;
+  color: var(--text);
+  font-family: 'Tajawal', sans-serif;
+  font-size: 13px;
+  padding: 8px 12px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+.entry-input:focus { border-color: var(--blue2); background: rgba(32,96,208,0.08); }
+.entry-notes { grid-column: 1 / -1; }
+.entry-actions { display: flex; gap: 10px; margin-top: 16px; }
+.btn-save {
+  flex: 1;
+  padding: 10px 20px;
+  background: rgba(32,96,208,0.2);
+  border: 1px solid rgba(61,142,240,0.5);
+  border-radius: 12px;
+  color: var(--blue2);
+  font-family: 'Tajawal', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-save:hover { background: rgba(32,96,208,0.35); }
+.btn-clear {
+  padding: 10px 20px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  color: var(--muted2);
+  font-family: 'Tajawal', sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-clear:hover { color: var(--text); border-color: var(--border2); }
+
+/* ── HISTORY TABLE ─────────────────────────────────────── */
+.history-section { margin-top: 0; }
+.history-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 22px;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+  background: rgba(255,255,255,0.02);
+}
+.history-toggle span { font-size: 13px; color: var(--muted2); font-weight: 600; }
+.history-toggle .ht-arrow { font-size: 14px; color: var(--muted); transition: transform 0.3s; }
+.history-toggle .ht-arrow.open { transform: rotate(180deg); }
+.history-body { display: none; overflow-x: auto; }
+.history-body.open { display: block; }
+
+table.htable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.htable thead th {
+  padding: 10px 14px;
+  text-align: center;
+  color: var(--muted2);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border2);
+  background: var(--surface3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.htable tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+.htable tbody tr:hover { background: rgba(255,255,255,0.03); }
+.htable tbody td { padding: 9px 14px; text-align: center; color: var(--text); }
+.htable tbody td.date-cell { color: var(--muted2); font-size: 12px; }
+.htable tbody td.in-cell { color: var(--blue2); font-weight: 600; }
+.htable tbody td.out-cell { color: var(--orange2); font-weight: 600; }
+.htable tbody td.rem-cell { color: var(--green2); font-weight: 600; }
+.htable tbody td.note-cell { color: var(--muted2); font-size: 12px; text-align: right; max-width: 160px; }
+.htable tbody tr.today-row { background: rgba(32,96,208,0.08); }
+.htable tbody tr.today-row td { font-weight: 700; }
+
+/* ── EXPORT BAR ─────────────────────────────────────────── */
+.export-bar {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  margin-top: 32px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 18px;
+}
+.btn-export {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 28px;
+  border-radius: 12px;
+  font-family: 'Tajawal', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid;
+}
+.btn-excel {
+  background: rgba(16,128,64,0.18);
+  border-color: rgba(16,160,80,0.5);
+  color: var(--green2);
+}
+.btn-excel:hover { background: rgba(16,128,64,0.32); }
+.btn-import {
+  background: rgba(32,96,208,0.18);
+  border-color: rgba(61,142,240,0.5);
+  color: var(--blue2);
+}
+.btn-import:hover { background: rgba(32,96,208,0.32); }
+.btn-pdf {
+  background: rgba(180,40,40,0.18);
+  border-color: rgba(240,80,80,0.5);
+  color: var(--red2);
+}
+.btn-pdf:hover { background: rgba(180,40,40,0.32); }
+
+/* ── PRINT / PDF ─────────────────────────────────────────── */
+@media print {
+  @page { size: A4 landscape; margin: 12mm 10mm 10mm; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body { background: #fff !important; color: #111 !important; font-family: 'Tajawal', sans-serif; }
+  body::before { display: none; }
+
+  .tabs-wrap, .date-nav, .export-bar, .toast,
+  .fp-toggle, .entry-panel,
+  .history-toggle, .history-body,
+  .nav-btn, .date-input,
+  .summary-grid,
+  .hdr-sub, .tank-pct-bar { display: none !important; }
+
+  /* ── ملخص اليومي في الطباعة ── */
+  .daily-overview {
+    display: block !important;
+    background: #fff !important;
+    border: 2px solid #2060d0 !important;
+    border-radius: 12px;
+    margin-bottom: 14px;
+    page-break-inside: avoid;
+    overflow: visible;
+    box-shadow: 0 2px 8px rgba(32,96,208,0.12) !important;
+  }
+  .daily-hdr {
+    background: linear-gradient(90deg, #1a3a6e, #2060d0) !important;
+    padding: 10px 18px !important;
+    border-radius: 10px 10px 0 0;
+    border-bottom: 2px solid #2060d0;
+  }
+  .daily-hdr h3 { color: #fff !important; font-size: 14px !important; font-weight: 900 !important; }
+  .daily-hdr button { display: none !important; }
+  .daily-table-wrap { overflow: visible !important; }
+  table.daily-table { font-size: 12px !important; }
+  .daily-table thead th {
+    background: #e8f0ff !important;
+    color: #1a3a6e !important;
+    border-bottom: 2px solid #2060d0 !important;
+    padding: 8px 12px !important;
+    font-size: 11px !important;
+  }
+  .daily-table tbody td {
+    padding: 8px 12px !important;
+    border-bottom: 1px solid #dde6f5 !important;
+    color: #111 !important;
+  }
+  .daily-table tbody tr:last-child td { border-bottom: none !important; }
+  .daily-table tbody tr:nth-child(even) { background: #f8faff !important; }
+  .factory-name-cell { color: #1a3a6e !important; font-weight: 800 !important; }
+  .factory-dot-inline { display: inline-block !important; }
+  .in-val { color: #1a5ab0 !important; }
+  .out-val { color: #c04010 !important; }
+  .rem-val { color: #0a7040 !important; }
+  .cars-val { color: #444 !important; }
+
+  /* ── صف الإجمالي ── */
+  .daily-total-row td {
+    background: linear-gradient(90deg,#e8f0ff,#f0f8e8) !important;
+    font-weight: 900 !important;
+    color: #1a3a6e !important;
+    border-top: 2px solid #2060d0 !important;
+  }
+
+  .app { max-width: 100%; padding: 0; }
+
+  /* ── رأس الصفحة الاحترافي ── */
+  .hdr {
+    background: linear-gradient(135deg, #1a3a6e 0%, #2060d0 100%) !important;
+    border: none;
+    border-radius: 10px;
+    padding: 14px 20px;
+    margin-bottom: 14px;
+    text-align: center;
+    position: relative;
+    overflow: visible;
+  }
+  .hdr::before { display: none; }
+  .hdr::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, #f0b830, #3d8ef0, #20d070);
+    display: block !important;
+  }
+  .hdr-top { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .hdr-icon { font-size: 30px; }
+  .hdr h1 { color: #fff !important; font-size: 20px; font-weight: 900; }
+  .hdr-date { color: rgba(255,255,255,0.85) !important; font-size: 12px; display: inline-block; margin-top: 6px; background: rgba(255,255,255,0.15); padding: 3px 14px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.25); }
+
+  /* ── فصل ملخص اليوم عن المعامل ── */
+  #factories-wrap {
+    page-break-before: always;
+  }
+
+  /* ── لوحة المعمل ── */
+  .factory-panel {
+    background: #fff !important;
+    border: 2px solid #2060d0 !important;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    page-break-inside: avoid;
+    overflow: visible;
+    box-shadow: 0 2px 8px rgba(32,96,208,0.12) !important;
+  }
+
+  .fp-header {
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: linear-gradient(90deg, #f0f5ff, #e8f0ff) !important;
+    border-bottom: 2px solid #2060d0;
+    cursor: default;
+    border-radius: 10px 10px 0 0;
+  }
+  .fp-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; box-shadow: none; }
+  .fp-name { color: #1a3a6e !important; font-size: 17px; font-weight: 900; flex: 1; }
+  .fp-month { background: #2060d0 !important; color: #fff !important; border: none; font-size: 11px; padding: 3px 12px; border-radius: 20px; font-weight: 700; }
+  .fp-status { display: none !important; }
+
+  /* ── صف الخزانات ── */
+  .tanks-row {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  .tank-col {
+    border-left: 1px solid #dde6f5;
+    padding: 14px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    background: #fafcff;
+  }
+  .tank-col:first-child { background: #f5f8ff; }
+  .tank-col:nth-child(2) { background: #fff8f5; }
+  .tank-col:last-child { border-left: none; background: #f5fff8; }
+  .tank-lbl { font-size: 13px; font-weight: 800; }
+  .tank-lbl[style*="3d8ef0"] { color: #1a5ab0 !important; }
+  .tank-lbl[style*="f07030"] { color: #c04010 !important; }
+  .tank-lbl[style*="20d070"] { color: #0a7040 !important; }
+  .tank-qty { font-size: 16px; font-weight: 900; }
+  .tank-qty[style*="3d8ef0"] { color: #1a5ab0 !important; }
+  .tank-qty[style*="f07030"] { color: #c04010 !important; }
+  .tank-qty[style*="20d070"] { color: #0a7040 !important; }
+  .tank-cars-row {
+    background: #f0f4ff !important;
+    border: 1px solid #c0d0f0 !important;
+    color: #333 !important;
+    border-radius: 20px;
+    padding: 5px 16px;
+    font-size: 13px;
+  }
+  .tank-col:nth-child(2) .tank-cars-row { background: #fff0ea !important; border-color: #f0c0a0 !important; }
+  .tank-col:last-child .tank-cars-row { background: #e8fff0 !important; border-color: #a0e0b8 !important; }
+  .tank-cars-num { color: #111 !important; font-weight: 900; font-size: 15px; }
+  .tank-wrap svg { display: block !important; }
+
+  /* ── تذييل الطباعة ── */
+  .print-footer {
+    display: block !important;
+    text-align: center;
+    margin-top: 14px;
+    padding: 8px 0;
+    border-top: 2px solid #2060d0;
+    color: #666;
+    font-size: 11px;
+  }
+}
+
+.print-footer { display: none; }
+
+/* ── DAILY VIEW ─────────────────────────────────────────── */
+.daily-overview {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 18px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+.daily-hdr {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.daily-hdr h3 { font-size: 15px; font-weight: 700; color: var(--text); }
+.daily-table-wrap { overflow-x: auto; }
+table.daily-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.daily-table thead th {
+  padding: 10px 16px;
+  background: var(--surface3);
+  border-bottom: 1px solid var(--border2);
+  color: var(--muted2);
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+.daily-table tbody td {
+  padding: 11px 16px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.daily-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+.factory-name-cell { text-align: right !important; font-weight: 700; }
+.factory-dot-inline { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-left: 8px; vertical-align: middle; }
+.in-val { color: var(--blue2); font-weight: 700; }
+.out-val { color: var(--orange2); font-weight: 700; }
+.rem-val { color: var(--green2); font-weight: 700; }
+.cars-val { color: var(--muted2); }
+
+/* ── TOAST ─────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
+  background: var(--surface3);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 1000;
+  transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), opacity 0.3s;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: var(--shadow);
+}
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+.toast.success { color: var(--green2); border-color: rgba(32,208,112,0.3); background: rgba(16,40,24,0.95); }
+.toast.error { color: var(--red2); border-color: rgba(208,48,48,0.3); background: rgba(40,16,16,0.95); }
+
+/* ── RESPONSIVE ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .tanks-row { grid-template-columns: 1fr; }
+  .tank-col { border-left: none; border-top: 1px solid var(--border); }
+  .tank-col:first-child { border-top: none; }
+  .entry-grid { grid-template-columns: 1fr; }
+  .summary-grid { grid-template-columns: 1fr; }
+  .hdr h1 { font-size: 22px; }
+  .tabs-wrap { flex-wrap: nowrap; }
+}
+
+@keyframes fillAnim {
+  from { opacity: 0; transform: scaleY(0); transform-origin: bottom; }
+  to { opacity: 1; transform: scaleY(1); transform-origin: bottom; }
+}
+.liquid-anim { animation: fillAnim 1.2s cubic-bezier(0.22,1,0.36,1) both; }
+
+@keyframes pulse {
+  0%,100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-top">
+    <span class="hdr-icon">⛽</span>
+    <h1 id="system-title">نظام متابعة الخزانات — خزاناتي</h1>
+    <button onclick="openEditTitleModal()" title="تعديل اسم النظام" style="background:rgba(255,255,255,0.07);border:1px solid rgba(100,150,255,0.2);border-radius:8px;color:#8ba0c0;font-size:14px;padding:4px 10px;cursor:pointer;transition:all 0.2s;font-family:'Tajawal',sans-serif;" onmouseover="this.style.color='#dce8ff';this.style.borderColor='rgba(100,150,255,0.5)'" onmouseout="this.style.color='#8ba0c0';this.style.borderColor='rgba(100,150,255,0.2)'">✏️ تعديل</button>
+  </div>
+  <div class="hdr-sub" id="system-subtitle">تسجيل يومي • عرض تفاعلي • تصدير Excel</div>
+  <div class="hdr-date" id="hdr-date">تحميل...</div>
+</div>
+
+<!-- TABS -->
+<div class="tabs-wrap" id="tabs-wrap"></div>
+
+<!-- DATE NAVIGATION -->
+<div class="date-nav">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span style="font-size:18px;">📅</span>
+    <h2 id="selected-date-label">اليوم</h2>
+  </div>
+  <div class="date-nav-btns">
+    <button class="nav-btn" onclick="navDay(-1)">◀ السابق</button>
+    <input type="date" class="date-input" id="date-picker" onchange="setDateFromPicker(this.value)">
+    <button class="nav-btn today" onclick="goToday()">اليوم</button>
+    <button class="nav-btn" onclick="navDay(1)">التالي ▶</button>
+  </div>
+</div>
+
+<!-- DAILY OVERVIEW TABLE -->
+<div class="daily-overview" id="daily-overview">
+  <div class="daily-hdr">
+    <h3>📊 ملخص اليوم — جميع المعامل</h3>
+    <button onclick="saveDailySummaryPDF()" style="display:flex;align-items:center;gap:6px;padding:7px 16px;background:rgba(240,80,80,0.15);border:1px solid rgba(240,80,80,0.4);border-radius:10px;color:#f05050;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='rgba(240,80,80,0.28)'" onmouseout="this.style.background='rgba(240,80,80,0.15)'">📄 حفظ ملخص اليوم PDF</button>
+  </div>
+  <div class="daily-table-wrap">
+    <table class="daily-table" id="daily-table">
+      <thead>
+        <tr>
+          <th>المعمل</th>
+          <th>🚛 سيارات واردة</th>
+          <th>📥 كمية واردة (طن)</th>
+          <th>🚛 سيارات صادرة</th>
+          <th>📤 كمية صادرة (طن)</th>
+          <th>⚖️ المتبقي التراكمي (طن)</th>
+        </tr>
+      </thead>
+      <tbody id="daily-tbody"></tbody>
+      <tfoot id="daily-tfoot"></tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- SUMMARY CARDS -->
+<div class="summary-grid">
+  <div class="sum-card blue">
+    <div class="sum-label">📥 وارد اليوم (جميع المعامل)</div>
+    <div class="sum-val" id="tot-in">—</div>
+    <div class="sum-sub" id="tot-in-cars">—</div>
+  </div>
+  <div class="sum-card orange">
+    <div class="sum-label">📤 صادر اليوم</div>
+    <div class="sum-val" id="tot-out">—</div>
+    <div class="sum-sub" id="tot-out-cars">—</div>
+  </div>
+  <div class="sum-card green">
+    <div class="sum-label">⚖️ إجمالي المتبقي</div>
+    <div class="sum-val" id="tot-rem">—</div>
+    <div class="sum-sub">متراكم حتى اليوم المختار</div>
+  </div>
+</div>
+
+<!-- FACTORIES CONTAINER -->
+<div id="factories-wrap"></div>
+
+<!-- EXPORT BAR -->
+<div class="export-bar">
+  <button class="btn-export btn-excel" onclick="exportExcel()">📊 تصدير Excel</button>
+  <button class="btn-export btn-import" onclick="document.getElementById('import-file-input').click()">📂 استيراد Excel</button>
+  <input type="file" id="import-file-input" accept=".xlsx,.xls" style="display:none" onchange="importExcel(this)">
+  <button class="btn-export btn-pdf" onclick="printPDF()">⬇️ حفظ PDF</button>
+  <button class="btn-export" style="background:rgba(240,184,48,0.18);border-color:rgba(240,184,48,0.5);color:#f0b830;" onclick="openNewMonthModal()">📅 شهر جديد</button>
+  <button class="btn-export" style="background:rgba(32,208,112,0.15);border-color:rgba(32,208,112,0.4);color:#20d070;" onclick="openOpeningModal()">⚖️ الافتتاحي</button>
+  <button class="btn-export" style="background:rgba(61,180,240,0.15);border-color:rgba(61,180,240,0.4);color:#3db4f0;" onclick="openManageFactoriesModal()">🏭 إدارة المعامل</button>
+  <button class="btn-export" style="background:rgba(180,40,180,0.15);border-color:rgba(200,60,200,0.4);color:#e060e0;" onclick="openChangePassModal()">🔐 رمز السر</button>
+  <button class="btn-export" style="background:rgba(240,184,48,0.12);border-color:rgba(240,184,48,0.35);color:#f0b830;" onclick="openSetRecoveryModal()">🔑 رمز الاسترداد</button>
+</div>
+
+</div><!-- /app -->
+
+<!-- تذييل الطباعة -->
+<div class="print-footer" id="print-footer">
+  ⛽ نظام متابعة الخزانات — خزاناتي &nbsp;|&nbsp; تم الطباعة: <span id="print-date-footer"></span>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- مودال إدارة المعامل -->
+<div id="factories-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9500;align-items:flex-start;justify-content:center;overflow-y:auto;padding:30px 0;backdrop-filter:blur(4px);">
+  <div style="background:#0d1422;border:1px solid rgba(100,150,255,0.25);border-radius:22px;padding:32px 36px;max-width:600px;width:94%;box-shadow:0 20px 60px rgba(0,0,0,0.9);position:relative;overflow:hidden;margin:auto;">
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#3db4f0,#3d8ef0,#a060f0);"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:28px;margin-bottom:4px;">🏭</div>
+        <h2 style="color:#dce8ff;font-size:18px;font-weight:900;">إدارة المعامل</h2>
+        <p style="color:#5a7090;font-size:12px;margin-top:3px;">إضافة أو حذف أو تعديل المعامل</p>
+      </div>
+      <button onclick="document.getElementById('factories-modal').style.display='none'" style="background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.15);border-radius:10px;color:#5a7090;font-size:18px;padding:6px 12px;cursor:pointer;">✕</button>
+    </div>
+
+    <!-- قائمة المعامل الحالية -->
+    <div id="factories-list" style="margin-bottom:20px;"></div>
+
+    <!-- إضافة معمل جديد -->
+    <div style="background:rgba(61,180,240,0.06);border:1px solid rgba(61,180,240,0.2);border-radius:16px;padding:18px 20px;">
+      <div style="font-size:13px;font-weight:800;color:#3db4f0;margin-bottom:14px;">➕ إضافة معمل جديد</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div>
+          <label style="font-size:11px;color:#5a7090;display:block;margin-bottom:5px;">🏷️ اسم المعمل</label>
+          <input type="text" id="nf-name" placeholder="مثال: معمل الفجر"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.2);border-radius:10px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:14px;padding:9px 12px;outline:none;"
+            onfocus="this.style.borderColor='rgba(61,180,240,0.7)'" onblur="this.style.borderColor='rgba(100,150,255,0.2)'">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#5a7090;display:block;margin-bottom:5px;">🔑 معرف فريد (انجليزي)</label>
+          <input type="text" id="nf-id" placeholder="مثال: fajr"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.2);border-radius:10px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:14px;padding:9px 12px;outline:none;"
+            onfocus="this.style.borderColor='rgba(61,180,240,0.7)'" onblur="this.style.borderColor='rgba(100,150,255,0.2)'">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+        <div>
+          <label style="font-size:11px;color:#5a7090;display:block;margin-bottom:5px;">🎨 اللون</label>
+          <input type="color" id="nf-color" value="#3d8ef0"
+            style="width:100%;height:40px;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.2);border-radius:10px;cursor:pointer;padding:2px 4px;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#5a7090;display:block;margin-bottom:5px;">📅 الشهر</label>
+          <input type="text" id="nf-month" placeholder="مثال: يونيو 2026"
+            style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.2);border-radius:10px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:14px;padding:9px 12px;outline:none;"
+            onfocus="this.style.borderColor='rgba(61,180,240,0.7)'" onblur="this.style.borderColor='rgba(100,150,255,0.2)'">
+        </div>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11px;color:#5a7090;display:block;margin-bottom:5px;">⚖️ الرصيد الافتتاحي (طن)</label>
+        <input type="number" id="nf-prev" value="0" min="0"
+          style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.2);border-radius:10px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:14px;padding:9px 12px;outline:none;"
+          onfocus="this.style.borderColor='rgba(61,180,240,0.7)'" onblur="this.style.borderColor='rgba(100,150,255,0.2)'">
+      </div>
+      <div id="nf-error" style="color:#f05050;font-size:12px;min-height:18px;margin-bottom:8px;"></div>
+      <button onclick="addNewFactory()" style="width:100%;padding:11px;background:rgba(61,180,240,0.2);border:1px solid rgba(61,180,240,0.5);border-radius:12px;color:#3db4f0;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:800;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='rgba(61,180,240,0.35)'" onmouseout="this.style.background='rgba(61,180,240,0.2)'">➕ إضافة المعمل</button>
+    </div>
+
+    <div style="margin-top:14px;background:rgba(240,184,48,0.07);border:1px solid rgba(240,184,48,0.18);border-radius:12px;padding:10px 14px;font-size:11px;color:#a08030;">
+      ⚠️ حذف المعمل سيمسح جميع بياناته. تأكد من التصدير أولاً.
+    </div>
+  </div>
+</div>
+
+<!-- شاشة القفل عند فتح الصفحة -->
+<div id="lock-screen" style="display:none;position:fixed;inset:0;background:rgba(8,12,18,0.97);z-index:99999;align-items:center;justify-content:center;backdrop-filter:blur(12px);">
+  <div style="background:#0f1520;border:1px solid rgba(100,150,255,0.3);border-radius:24px;padding:48px 44px;text-align:center;max-width:400px;width:92%;box-shadow:0 30px 80px rgba(0,0,0,0.9);position:relative;overflow:hidden;">
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#3d8ef0,#f0b830,#20d070);"></div>
+    <div style="font-size:52px;margin-bottom:16px;filter:drop-shadow(0 0 20px rgba(61,142,240,0.6));">🔐</div>
+    <h2 style="color:#dce8ff;font-size:22px;font-weight:900;margin-bottom:8px;">خزاناتي</h2>
+    <p style="color:#5a7090;font-size:13px;margin-bottom:28px;">أدخل رمز السر للدخول إلى النظام</p>
+    <div style="position:relative;margin-bottom:10px;">
+      <input type="password" id="lock-input" placeholder="••••••••" autocomplete="off"
+        style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.25);border-radius:14px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:20px;padding:14px 50px 14px 18px;text-align:center;outline:none;letter-spacing:8px;transition:border-color 0.2s;"
+        onkeydown="if(event.key==='Enter')confirmLock()"
+        onfocus="this.style.borderColor='rgba(61,142,240,0.7)'"
+        onblur="this.style.borderColor='rgba(100,150,255,0.25)'">
+      <button onclick="toggleLockVis()" id="lock-vis-btn" title="إظهار/إخفاء الرمز"
+        style="position:absolute;left:14px;top:50%;transform:translateY(-50%);background:none;border:none;color:#5a7090;font-size:20px;cursor:pointer;padding:0;line-height:1;">👁️</button>
+    </div>
+    <div id="lock-error" style="color:#f05050;font-size:12px;height:20px;margin-bottom:14px;"></div>
+    <button onclick="confirmLock()" style="width:100%;padding:14px;background:linear-gradient(135deg,rgba(32,96,208,0.35),rgba(61,142,240,0.25));border:1px solid rgba(61,142,240,0.6);border-radius:14px;color:#3d8ef0;font-family:'Tajawal',sans-serif;font-size:16px;font-weight:800;cursor:pointer;transition:all 0.2s;"
+      onmouseover="this.style.background='linear-gradient(135deg,rgba(32,96,208,0.55),rgba(61,142,240,0.45))'"
+      onmouseout="this.style.background='linear-gradient(135deg,rgba(32,96,208,0.35),rgba(61,142,240,0.25))'">
+      🔓 دخول
+    </button>
+    <div id="lock-attempts" style="margin-top:14px;font-size:11px;color:#3a4a60;"></div>
+    <button onclick="openRecoveryModal()" style="margin-top:18px;background:none;border:none;color:#3a4a60;font-family:'Tajawal',sans-serif;font-size:12px;cursor:pointer;text-decoration:underline;transition:color 0.2s;" onmouseover="this.style.color='#8ba0c0'" onmouseout="this.style.color='#3a4a60'">🔑 نسيت كلمة السر؟</button>
+  </div>
+</div>
+
+<!-- مودال رمز السر -->
+<div id="pass-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div style="background:#0f1520;border:1px solid rgba(100,150,255,0.25);border-radius:20px;padding:36px 40px;text-align:center;max-width:380px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.8);">
+    <div style="font-size:40px;margin-bottom:14px;">🔐</div>
+    <h2 style="color:#dce8ff;font-size:20px;margin-bottom:8px;" id="pass-modal-title">رمز السر</h2>
+    <p style="color:#5a7090;font-size:13px;margin-bottom:22px;" id="pass-modal-desc">أدخل رمز السر للمتابعة</p>
+    <input type="password" id="pass-input" placeholder="••••••••" autocomplete="off"
+      style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.2);border-radius:12px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:18px;padding:12px 16px;text-align:center;outline:none;letter-spacing:6px;margin-bottom:8px;"
+      onkeydown="if(event.key==='Enter')confirmPass()">
+    <div id="pass-error" style="color:#f05050;font-size:12px;height:18px;margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="cancelPass()" style="flex:1;padding:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.15);border-radius:12px;color:#5a7090;font-family:'Tajawal',sans-serif;font-size:14px;cursor:pointer;">إلغاء</button>
+      <button onclick="confirmPass()" style="flex:2;padding:10px;background:rgba(32,96,208,0.25);border:1px solid rgba(61,142,240,0.5);border-radius:12px;color:#3d8ef0;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;">✔ تأكيد</button>
+    </div>
+  </div>
+</div>
+
+<!-- مودال شهر جديد / افتتاحي -->
+<div id="month-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div style="background:#0f1520;border:1px solid rgba(100,150,255,0.25);border-radius:20px;padding:32px 36px;text-align:center;max-width:460px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.8);">
+    <div style="font-size:36px;margin-bottom:12px;">📅</div>
+    <h2 style="color:#dce8ff;font-size:19px;margin-bottom:6px;">فتح شهر جديد</h2>
+    <p style="color:#5a7090;font-size:12px;margin-bottom:24px;">سيتم حفظ الشهر الحالي وفتح شهر جديد. المتبقي الحالي سيصبح الافتتاحي للشهر الجديد.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;text-align:right;">
+      <div>
+        <label style="font-size:11px;color:#5a7090;display:block;margin-bottom:6px;">السنة</label>
+        <input type="number" id="new-month-year" value="2026" min="2020" max="2040"
+          style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.2);border-radius:10px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:15px;padding:10px 14px;outline:none;">
+      </div>
+      <div>
+        <label style="font-size:11px;color:#5a7090;display:block;margin-bottom:6px;">الشهر</label>
+        <select id="new-month-num" style="width:100%;background:#0f1520;border:1px solid rgba(100,150,255,0.2);border-radius:10px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:14px;padding:10px 14px;outline:none;cursor:pointer;">
+          <option value="01">يناير</option><option value="02">فبراير</option><option value="03">مارس</option>
+          <option value="04">أبريل / نيسان</option><option value="05" selected>مايو / أيار</option>
+          <option value="06">يونيو / حزيران</option><option value="07">يوليو / تموز</option>
+          <option value="08">أغسطس / آب</option><option value="09">سبتمبر / أيلول</option>
+          <option value="10">أكتوبر / تشرين أول</option><option value="11">نوفمبر / تشرين ثاني</option>
+          <option value="12">ديسمبر / كانون</option>
+        </select>
+      </div>
+    </div>
+    <div style="background:rgba(240,184,48,0.08);border:1px solid rgba(240,184,48,0.2);border-radius:12px;padding:14px;margin-bottom:20px;text-align:right;" id="month-preview"></div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="document.getElementById('month-modal').style.display='none'" style="flex:1;padding:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.15);border-radius:12px;color:#5a7090;font-family:'Tajawal',sans-serif;font-size:14px;cursor:pointer;">إلغاء</button>
+      <button onclick="confirmNewMonth()" style="flex:2;padding:10px;background:rgba(240,184,48,0.2);border:1px solid rgba(240,184,48,0.5);border-radius:12px;color:#f0b830;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;">📅 فتح الشهر الجديد</button>
+    </div>
+  </div>
+</div>
+
+<!-- مودال تعديل اسم النظام -->
+<div id="edit-title-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div style="background:#0f1520;border:1px solid rgba(100,150,255,0.25);border-radius:20px;padding:36px 40px;text-align:center;max-width:500px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,0.8);position:relative;overflow:hidden;">
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#3d8ef0,#f0b830,#20d070);"></div>
+    <div style="font-size:36px;margin-bottom:12px;">✏️</div>
+    <h2 style="color:#dce8ff;font-size:19px;margin-bottom:6px;">تعديل اسم النظام</h2>
+    <p style="color:#5a7090;font-size:12px;margin-bottom:24px;">يمكنك تخصيص اسم النظام والعنوان الفرعي كما تريد</p>
+    <div style="text-align:right;margin-bottom:14px;">
+      <label style="font-size:12px;color:#8ba0c0;display:block;margin-bottom:6px;">🏷️ الاسم الرئيسي</label>
+      <input type="text" id="edit-title-main" placeholder="مثال: نظام متابعة الخزانات — شركتي"
+        style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.2);border-radius:11px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:15px;padding:10px 14px;outline:none;transition:border-color 0.2s;"
+        onfocus="this.style.borderColor='rgba(61,142,240,0.6)'" onblur="this.style.borderColor='rgba(100,150,255,0.2)'">
+    </div>
+    <div style="text-align:right;margin-bottom:14px;">
+      <label style="font-size:12px;color:#8ba0c0;display:block;margin-bottom:6px;">📝 العنوان الفرعي</label>
+      <input type="text" id="edit-title-sub" placeholder="مثال: تسجيل يومي • عرض تفاعلي"
+        style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.2);border-radius:11px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:14px;padding:10px 14px;outline:none;transition:border-color 0.2s;"
+        onfocus="this.style.borderColor='rgba(61,142,240,0.6)'" onblur="this.style.borderColor='rgba(100,150,255,0.2)'">
+    </div>
+    <div style="text-align:right;margin-bottom:20px;">
+      <label style="font-size:12px;color:#8ba0c0;display:block;margin-bottom:6px;">⛽ أيقونة النظام (رمز emoji)</label>
+      <input type="text" id="edit-title-icon" placeholder="مثال: ⛽ 🏭 💧 ⚙️"
+        style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.2);border-radius:11px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:22px;padding:10px 14px;outline:none;transition:border-color 0.2s;text-align:center;"
+        onfocus="this.style.borderColor='rgba(61,142,240,0.6)'" onblur="this.style.borderColor='rgba(100,150,255,0.2)'">
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="document.getElementById('edit-title-modal').style.display='none'" style="flex:1;padding:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.15);border-radius:12px;color:#5a7090;font-family:'Tajawal',sans-serif;font-size:14px;cursor:pointer;">إلغاء</button>
+      <button onclick="saveSystemTitle()" style="flex:2;padding:10px;background:rgba(32,96,208,0.25);border:1px solid rgba(61,142,240,0.5);border-radius:12px;color:#3d8ef0;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;">💾 حفظ التغييرات</button>
+    </div>
+  </div>
+</div>
+
+<!-- مودال رمز الاسترداد -->
+<div id="recovery-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99998;align-items:center;justify-content:center;backdrop-filter:blur(6px);">
+  <div style="background:#0f1520;border:1px solid rgba(240,184,48,0.35);border-radius:22px;padding:40px 44px;text-align:center;max-width:420px;width:92%;box-shadow:0 30px 80px rgba(0,0,0,0.9);position:relative;overflow:hidden;">
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#f0b830,#f07030,#f05050);"></div>
+    <div style="font-size:48px;margin-bottom:14px;filter:drop-shadow(0 0 18px rgba(240,184,48,0.5));">🔑</div>
+    <h2 style="color:#dce8ff;font-size:20px;font-weight:900;margin-bottom:6px;" id="rec-title">استرداد كلمة السر</h2>
+    <p style="color:#5a7090;font-size:12px;margin-bottom:24px;" id="rec-desc">أدخل رمز الاسترداد السري لإعادة تعيين كلمة السر</p>
+    <input type="password" id="rec-input" placeholder="••••••••" autocomplete="off"
+      style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(240,184,48,0.3);border-radius:14px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:18px;padding:13px 18px;text-align:center;outline:none;letter-spacing:6px;margin-bottom:8px;transition:border-color 0.2s;"
+      onkeydown="if(event.key==='Enter')confirmRecovery()"
+      onfocus="this.style.borderColor='rgba(240,184,48,0.8)'"
+      onblur="this.style.borderColor='rgba(240,184,48,0.3)'">
+    <div id="rec-error" style="color:#f05050;font-size:12px;height:18px;margin-bottom:14px;"></div>
+    <!-- حقل كلمة السر الجديدة — يظهر فقط بعد التحقق -->
+    <div id="rec-newpass-wrap" style="display:none;margin-bottom:14px;">
+      <p style="color:#f0b830;font-size:12px;margin-bottom:10px;">✅ رمز الاسترداد صحيح — أدخل كلمة السر الجديدة</p>
+      <input type="password" id="rec-newpass" placeholder="كلمة السر الجديدة" autocomplete="off"
+        style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(32,208,112,0.4);border-radius:14px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:16px;padding:12px 18px;text-align:center;outline:none;letter-spacing:4px;transition:border-color 0.2s;"
+        onkeydown="if(event.key==='Enter')confirmRecovery()"
+        onfocus="this.style.borderColor='rgba(32,208,112,0.8)'"
+        onblur="this.style.borderColor='rgba(32,208,112,0.4)'">
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="closeRecoveryModal()" style="flex:1;padding:11px;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.15);border-radius:12px;color:#5a7090;font-family:'Tajawal',sans-serif;font-size:14px;cursor:pointer;">إلغاء</button>
+      <button onclick="confirmRecovery()" style="flex:2;padding:11px;background:rgba(240,184,48,0.2);border:1px solid rgba(240,184,48,0.5);border-radius:12px;color:#f0b830;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;">🔓 تأكيد</button>
+    </div>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:#3a4a60;">لتعيين رمز استرداد: اذهب إلى 🔐 رمز السر ← تعيين رمز الاسترداد</div>
+  </div>
+</div>
+
+<!-- مودال تعيين رمز الاسترداد -->
+<div id="set-recovery-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9100;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div style="background:#0f1520;border:1px solid rgba(240,184,48,0.25);border-radius:20px;padding:36px 40px;text-align:center;max-width:400px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,0.85);position:relative;overflow:hidden;">
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#f0b830,#f07030);"></div>
+    <div style="font-size:38px;margin-bottom:12px;">🔑</div>
+    <h2 style="color:#dce8ff;font-size:18px;font-weight:900;margin-bottom:6px;">تعيين رمز الاسترداد</h2>
+    <p style="color:#5a7090;font-size:12px;margin-bottom:22px;">هذا الرمز يُستخدم عند نسيان كلمة السر. احفظه في مكان آمن.</p>
+    <input type="text" id="srec-input" placeholder="مثال: اسم والدتك أو تاريخ ميلادك" autocomplete="off"
+      style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(240,184,48,0.25);border-radius:12px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:14px;padding:11px 16px;text-align:center;outline:none;margin-bottom:8px;transition:border-color 0.2s;"
+      onkeydown="if(event.key==='Enter')saveRecoveryCode()"
+      onfocus="this.style.borderColor='rgba(240,184,48,0.7)'"
+      onblur="this.style.borderColor='rgba(240,184,48,0.25)'">
+    <div id="srec-error" style="color:#f05050;font-size:12px;height:18px;margin-bottom:12px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="document.getElementById('set-recovery-modal').style.display='none'" style="flex:1;padding:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.15);border-radius:12px;color:#5a7090;font-family:'Tajawal',sans-serif;font-size:14px;cursor:pointer;">إلغاء</button>
+      <button onclick="saveRecoveryCode()" style="flex:2;padding:10px;background:rgba(240,184,48,0.2);border:1px solid rgba(240,184,48,0.5);border-radius:12px;color:#f0b830;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;">💾 حفظ الرمز</button>
+    </div>
+  </div>
+</div>
+
+<!-- مودال طباعة ملخص اليوم -->
+<div id="daily-print-area" style="display:none;"></div>
+
+
+<div id="opening-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div style="background:#0f1520;border:1px solid rgba(100,150,255,0.25);border-radius:20px;padding:32px 36px;text-align:center;max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.8);">
+    <div style="font-size:36px;margin-bottom:12px;">⚖️</div>
+    <h2 style="color:#dce8ff;font-size:19px;margin-bottom:6px;">تعديل الرصيد الافتتاحي</h2>
+    <p style="color:#5a7090;font-size:12px;margin-bottom:22px;">الرصيد المتبقي من الشهر السابق لكل معمل</p>
+    <div id="opening-fields" style="text-align:right;"></div>
+    <div style="display:flex;gap:10px;margin-top:20px;">
+      <button onclick="document.getElementById('opening-modal').style.display='none'" style="flex:1;padding:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.15);border-radius:12px;color:#5a7090;font-family:'Tajawal',sans-serif;font-size:14px;cursor:pointer;">إلغاء</button>
+      <button onclick="saveOpeningBalances()" style="flex:2;padding:10px;background:rgba(32,208,112,0.2);border:1px solid rgba(32,208,112,0.4);border-radius:12px;color:#20d070;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;">💾 حفظ الافتتاحي</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+// DATA — مُحمَّل من ملف الإكسل الأصلي
+// ════════════════════════════════════════════════
+const TANK_CAP = 5500000;
+
+const FACTORIES = [
+  { id: 'ezz',      name: 'معمل العز',        color: '#2d8ef5', month: 'حزيران 2026' },
+  { id: 'najma',    name: 'معمل نجمة أربيل',  color: '#20d070', month: 'حزيران 2026' },
+  { id: 'dahab',    name: 'معمل ذهب كركوك',   color: '#f0b830', month: 'حزيران 2026' },
+  { id: 'ittihad',  name: 'معمل الاتحاد',     color: '#a060f0', month: 'حزيران 2026' },
+  { id: 'rawaj',    name: 'شركة الرواج',      color: '#f05050', month: 'حزيران 2026' },
+  { id: 'baron',    name: 'شركة قصر البارون', color: '#e0a020', month: 'حزيران 2026' },
+  { id: 'sadaqa',   name: 'شركة الصداقة',     color: '#20c0c0', month: 'حزيران 2026' },
+];
+
+// بيانات الإكسل مُضمَّنة مباشرة
+const RAW_DATA = {
+  ezz: { prevMonth: 174961, rows: [{"idx":1,"date":"2026-06-01","cars_in":1,"qty_in":30550,"cars_out":1,"qty_out":30710,"notes":""},{"idx":2,"date":"2026-06-02","cars_in":1,"qty_in":30930,"cars_out":1,"qty_out":32160,"notes":""},{"idx":3,"date":"2026-06-03","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":4,"date":"2026-06-04","cars_in":1,"qty_in":31470,"cars_out":0,"qty_out":0,"notes":""},{"idx":5,"date":"2026-06-05","cars_in":1,"qty_in":34100,"cars_out":0,"qty_out":0,"notes":""},{"idx":6,"date":"2026-06-06","cars_in":1,"qty_in":34490,"cars_out":0,"qty_out":0,"notes":""},{"idx":7,"date":"2026-06-07","cars_in":1,"qty_in":31580,"cars_out":4,"qty_out":142180,"notes":""},{"idx":8,"date":"2026-06-08","cars_in":2,"qty_in":66030,"cars_out":0,"qty_out":0,"notes":""},{"idx":9,"date":"2026-06-09","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":10,"date":"2026-06-10","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":11,"date":"2026-06-11","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":12,"date":"2026-06-12","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":13,"date":"2026-06-13","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":14,"date":"2026-06-14","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":15,"date":"2026-06-15","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":16,"date":"2026-06-16","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":17,"date":"2026-06-17","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":18,"date":"2026-06-18","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":19,"date":"2026-06-19","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":20,"date":"2026-06-20","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":21,"date":"2026-06-21","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":22,"date":"2026-06-22","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":23,"date":"2026-06-23","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":24,"date":"2026-06-24","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":25,"date":"2026-06-25","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":26,"date":"2026-06-26","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":27,"date":"2026-06-27","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":28,"date":"2026-06-28","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":29,"date":"2026-06-29","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":30,"date":"2026-06-30","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":31,"date":"2026-07-01","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""}] },
+  najma: { prevMonth: 193365, rows: [{"idx":1,"date":"2026-06-01","cars_in":2,"qty_in":62080,"cars_out":2,"qty_out":62080,"notes":""},{"idx":2,"date":"2026-06-02","cars_in":2,"qty_in":66590,"cars_out":0,"qty_out":0,"notes":""},{"idx":3,"date":"2026-06-03","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":4,"date":"2026-06-04","cars_in":2,"qty_in":64930,"cars_out":0,"qty_out":0,"notes":""},{"idx":5,"date":"2026-06-05","cars_in":3,"qty_in":93510,"cars_out":0,"qty_out":0,"notes":""},{"idx":6,"date":"2026-06-06","cars_in":3,"qty_in":97130,"cars_out":0,"qty_out":0,"notes":""},{"idx":7,"date":"2026-06-07","cars_in":3,"qty_in":99590,"cars_out":8,"qty_out":272370,"notes":""},{"idx":8,"date":"2026-06-08","cars_in":2,"qty_in":70060,"cars_out":6,"qty_out":200740,"notes":""},{"idx":9,"date":"2026-06-09","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":10,"date":"2026-06-10","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":11,"date":"2026-06-11","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":12,"date":"2026-06-12","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":13,"date":"2026-06-13","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":14,"date":"2026-06-14","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":15,"date":"2026-06-15","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":16,"date":"2026-06-16","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":17,"date":"2026-06-17","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":18,"date":"2026-06-18","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":19,"date":"2026-06-19","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":20,"date":"2026-06-20","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":21,"date":"2026-06-21","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":22,"date":"2026-06-22","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":23,"date":"2026-06-23","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":24,"date":"2026-06-24","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":25,"date":"2026-06-25","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":26,"date":"2026-06-26","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":27,"date":"2026-06-27","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":28,"date":"2026-06-28","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":29,"date":"2026-06-29","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":30,"date":"2026-06-30","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":31,"date":"2026-07-01","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""}] },
+  dahab: { prevMonth: 165966, rows: [{"idx":1,"date":"2026-06-01","cars_in":4,"qty_in":135950,"cars_out":0,"qty_out":0,"notes":""},{"idx":2,"date":"2026-06-02","cars_in":4,"qty_in":133570,"cars_out":4,"qty_out":135610,"notes":""},{"idx":3,"date":"2026-06-03","cars_in":4,"qty_in":127470,"cars_out":0,"qty_out":0,"notes":""},{"idx":4,"date":"2026-06-04","cars_in":4,"qty_in":137860,"cars_out":0,"qty_out":0,"notes":""},{"idx":5,"date":"2026-06-05","cars_in":4,"qty_in":129920,"cars_out":0,"qty_out":0,"notes":""},{"idx":6,"date":"2026-06-06","cars_in":4,"qty_in":135780,"cars_out":0,"qty_out":0,"notes":""},{"idx":7,"date":"2026-06-07","cars_in":5,"qty_in":168030,"cars_out":8,"qty_out":261340,"notes":""},{"idx":8,"date":"2026-06-08","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":9,"date":"2026-06-09","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":10,"date":"2026-06-10","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":11,"date":"2026-06-11","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":12,"date":"2026-06-12","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":13,"date":"2026-06-13","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":14,"date":"2026-06-14","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":15,"date":"2026-06-15","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":16,"date":"2026-06-16","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":17,"date":"2026-06-17","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":18,"date":"2026-06-18","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":19,"date":"2026-06-19","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":20,"date":"2026-06-20","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":21,"date":"2026-06-21","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":22,"date":"2026-06-22","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":23,"date":"2026-06-23","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":24,"date":"2026-06-24","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":25,"date":"2026-06-25","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":26,"date":"2026-06-26","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":27,"date":"2026-06-27","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":28,"date":"2026-06-28","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":29,"date":"2026-06-29","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":30,"date":"2026-06-30","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":31,"date":"2026-07-01","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""}] },
+  ittihad: { prevMonth: 194624, rows: [{"idx":1,"date":"2026-06-01","cars_in":1,"qty_in":34450,"cars_out":4,"qty_out":125310,"notes":""},{"idx":2,"date":"2026-06-02","cars_in":2,"qty_in":65120,"cars_out":2,"qty_out":63260,"notes":""},{"idx":3,"date":"2026-06-03","cars_in":2,"qty_in":67020,"cars_out":0,"qty_out":0,"notes":""},{"idx":4,"date":"2026-06-04","cars_in":3,"qty_in":103010,"cars_out":0,"qty_out":0,"notes":""},{"idx":5,"date":"2026-06-05","cars_in":3,"qty_in":97410,"cars_out":0,"qty_out":0,"notes":""},{"idx":6,"date":"2026-06-06","cars_in":3,"qty_in":92610,"cars_out":0,"qty_out":0,"notes":""},{"idx":7,"date":"2026-06-07","cars_in":3,"qty_in":99150,"cars_out":3,"qty_out":100100,"notes":""},{"idx":8,"date":"2026-06-08","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":9,"date":"2026-06-09","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":10,"date":"2026-06-10","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":11,"date":"2026-06-11","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":12,"date":"2026-06-12","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":13,"date":"2026-06-13","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":14,"date":"2026-06-14","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":15,"date":"2026-06-15","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":16,"date":"2026-06-16","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":17,"date":"2026-06-17","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":18,"date":"2026-06-18","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":19,"date":"2026-06-19","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":20,"date":"2026-06-20","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":21,"date":"2026-06-21","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":22,"date":"2026-06-22","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":23,"date":"2026-06-23","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":24,"date":"2026-06-24","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":25,"date":"2026-06-25","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":26,"date":"2026-06-26","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":27,"date":"2026-06-27","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":28,"date":"2026-06-28","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":29,"date":"2026-06-29","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":30,"date":"2026-06-30","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":31,"date":"2026-07-01","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""}] },
+  rawaj: { prevMonth: 8923530, rows: [{"idx":1,"date":"2026-06-01","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":2,"date":"2026-06-02","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":3,"date":"2026-06-03","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":4,"date":"2026-06-04","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":5,"date":"2026-06-05","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":6,"date":"2026-06-06","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":7,"date":"2026-06-07","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":8,"date":"2026-06-08","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":9,"date":"2026-06-09","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":10,"date":"2026-06-10","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":11,"date":"2026-06-11","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":12,"date":"2026-06-12","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":13,"date":"2026-06-13","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":14,"date":"2026-06-14","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":15,"date":"2026-06-15","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":16,"date":"2026-06-16","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":17,"date":"2026-06-17","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":18,"date":"2026-06-18","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":19,"date":"2026-06-19","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":20,"date":"2026-06-20","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":21,"date":"2026-06-21","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":22,"date":"2026-06-22","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":23,"date":"2026-06-23","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":24,"date":"2026-06-24","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":25,"date":"2026-06-25","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":26,"date":"2026-06-26","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":27,"date":"2026-06-27","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":28,"date":"2026-06-28","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":29,"date":"2026-06-29","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":30,"date":"2026-06-30","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""}] },
+  baron: { prevMonth: 8923530, rows: [{"idx":1,"date":"2026-06-01","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":2,"date":"2026-06-02","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":3,"date":"2026-06-03","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":4,"date":"2026-06-04","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":5,"date":"2026-06-05","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":6,"date":"2026-06-06","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":7,"date":"2026-06-07","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":8,"date":"2026-06-08","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":9,"date":"2026-06-09","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":10,"date":"2026-06-10","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":11,"date":"2026-06-11","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":12,"date":"2026-06-12","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":13,"date":"2026-06-13","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":14,"date":"2026-06-14","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":15,"date":"2026-06-15","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":16,"date":"2026-06-16","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":17,"date":"2026-06-17","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":18,"date":"2026-06-18","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":19,"date":"2026-06-19","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":20,"date":"2026-06-20","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":21,"date":"2026-06-21","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":22,"date":"2026-06-22","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":23,"date":"2026-06-23","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":24,"date":"2026-06-24","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":25,"date":"2026-06-25","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":26,"date":"2026-06-26","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":27,"date":"2026-06-27","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":28,"date":"2026-06-28","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":29,"date":"2026-06-29","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":30,"date":"2026-06-30","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""}] },
+  sadaqa: { prevMonth: 0, rows: [{"idx":1,"date":"2026-06-01","cars_in":1,"qty_in":30040,"cars_out":0,"qty_out":0,"notes":""},{"idx":2,"date":"2026-06-02","cars_in":1,"qty_in":31840,"cars_out":4,"qty_out":145470,"notes":""},{"idx":3,"date":"2026-06-03","cars_in":1,"qty_in":30720,"cars_out":0,"qty_out":0,"notes":""},{"idx":4,"date":"2026-06-04","cars_in":1,"qty_in":30630,"cars_out":0,"qty_out":0,"notes":""},{"idx":5,"date":"2026-06-05","cars_in":1,"qty_in":31640,"cars_out":0,"qty_out":0,"notes":""},{"idx":6,"date":"2026-06-06","cars_in":2,"qty_in":68070,"cars_out":0,"qty_out":0,"notes":""},{"idx":7,"date":"2026-06-07","cars_in":1,"qty_in":34450,"cars_out":6,"qty_out":209620,"notes":""},{"idx":8,"date":"2026-06-08","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":9,"date":"2026-06-09","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":10,"date":"2026-06-10","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":11,"date":"2026-06-11","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":12,"date":"2026-06-12","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":13,"date":"2026-06-13","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":14,"date":"2026-06-14","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":15,"date":"2026-06-15","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":16,"date":"2026-06-16","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":17,"date":"2026-06-17","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":18,"date":"2026-06-18","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":19,"date":"2026-06-19","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":20,"date":"2026-06-20","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":21,"date":"2026-06-21","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":22,"date":"2026-06-22","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":23,"date":"2026-06-23","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":24,"date":"2026-06-24","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":25,"date":"2026-06-25","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":26,"date":"2026-06-26","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":27,"date":"2026-06-27","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":28,"date":"2026-06-28","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":29,"date":"2026-06-29","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":30,"date":"2026-06-30","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""},{"idx":31,"date":"2026-07-01","cars_in":0,"qty_in":0,"cars_out":0,"qty_out":0,"notes":""}] },
+};
+
+// Storage key
+const STORAGE_KEY = 'khazanati_data_v2';
+const PASS_KEY    = 'khazanati_pass';
+const MONTHS_KEY  = 'khazanati_months'; // saved months archive
+const TITLE_KEY   = 'khazanati_title';  // custom title storage
+
+// ════════════════════════════════════════════════
+// SYSTEM TITLE
+// ════════════════════════════════════════════════
+function loadSystemTitle() {
+  // مزامنة العنوان من Firebase
+  if (window._fbListen) {
+    window._fbListen('title', function(fbTitle) {
+      if (fbTitle) {
+        localStorage.setItem(TITLE_KEY, JSON.stringify(fbTitle));
+        try {
+          if (fbTitle.main) document.getElementById('system-title').textContent = fbTitle.main;
+          if (fbTitle.sub)  document.getElementById('system-subtitle').textContent = fbTitle.sub;
+          if (fbTitle.icon) document.querySelector('.hdr-icon').textContent = fbTitle.icon;
+        } catch(e) {}
+      }
+    });
+  }
+  try {
+    const saved = JSON.parse(localStorage.getItem(TITLE_KEY) || 'null');
+    if (saved) {
+      if (saved.main) document.getElementById('system-title').textContent = saved.main;
+      if (saved.sub)  document.getElementById('system-subtitle').textContent = saved.sub;
+      if (saved.icon) document.querySelector('.hdr-icon').textContent = saved.icon;
+      // Update print footer too
+      const pf = document.getElementById('print-footer');
+      if (pf && saved.main) pf.innerHTML = (saved.icon||'⛽') + ' ' + saved.main + ' &nbsp;|&nbsp; تم الطباعة: <span id="print-date-footer"></span>';
+    }
+  } catch(e) {}
+}
+
+function openEditTitleModal() {
+  const saved = JSON.parse(localStorage.getItem(TITLE_KEY) || 'null') || {};
+  document.getElementById('edit-title-main').value = saved.main || document.getElementById('system-title').textContent;
+  document.getElementById('edit-title-sub').value  = saved.sub  || document.getElementById('system-subtitle').textContent;
+  document.getElementById('edit-title-icon').value = saved.icon || document.querySelector('.hdr-icon').textContent;
+  document.getElementById('edit-title-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('edit-title-main').focus(), 100);
+}
+
+function saveSystemTitle() {
+  const main = document.getElementById('edit-title-main').value.trim();
+  const sub  = document.getElementById('edit-title-sub').value.trim();
+  const icon = document.getElementById('edit-title-icon').value.trim();
+  if (!main) { showToast('⚠️ يرجى إدخال الاسم الرئيسي', 'error'); return; }
+  localStorage.setItem(TITLE_KEY, JSON.stringify({ main, sub, icon }));
+  if (window._fbSave) { try { window._fbSave('title', { main, sub, icon }); } catch(e) {} }
+  document.getElementById('edit-title-modal').style.display = 'none';
+  loadSystemTitle();
+  updatePageTitle();
+  showToast('✅ تم حفظ اسم النظام بنجاح', 'success');
+}
+
+// ════════════════════════════════════════════════
+// DAILY SUMMARY PRINT
+// ════════════════════════════════════════════════
+function printDailySummary() {
+  const systemTitle = document.getElementById('system-title').textContent;
+  const systemIcon  = document.querySelector('.hdr-icon').textContent;
+  const dateLabel   = document.getElementById('selected-date-label').textContent;
+  const printDate   = new Date().toLocaleDateString('ar-IQ', {year:'numeric',month:'long',day:'numeric'});
+
+  // Build rows
+  let tableRows = '';
+  let grandIn=0, grandOut=0, grandRem=0, grandCIn=0, grandCOut=0;
+  FACTORIES.forEach(f => {
+    const row = getRow(f.id, selectedDate) || {};
+    const rem = Math.max(0, getCumulative(f.id, selectedDate));
+    const cIn  = row.cars_in  || 0;
+    const qIn  = row.qty_in   || 0;
+    const cOut = row.cars_out || 0;
+    const qOut = row.qty_out  || 0;
+    grandIn  += qIn;  grandOut += qOut; grandRem += rem;
+    grandCIn += cIn;  grandCOut += cOut;
+    tableRows += `<tr>
+      <td style="text-align:right;font-weight:700;padding:10px 14px;border-bottom:1px solid #e0e8f5;">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${f.color};margin-left:8px;vertical-align:middle;"></span>${f.name}
+      </td>
+      <td style="text-align:center;padding:10px 14px;border-bottom:1px solid #e0e8f5;color:#1a5ab0;font-weight:700;">${fmt(cIn)}</td>
+      <td style="text-align:center;padding:10px 14px;border-bottom:1px solid #e0e8f5;color:#1a5ab0;font-weight:800;">${fmt(qIn)}</td>
+      <td style="text-align:center;padding:10px 14px;border-bottom:1px solid #e0e8f5;color:#c04010;font-weight:700;">${fmt(cOut)}</td>
+      <td style="text-align:center;padding:10px 14px;border-bottom:1px solid #e0e8f5;color:#c04010;font-weight:800;">${fmt(qOut)}</td>
+      <td style="text-align:center;padding:10px 14px;border-bottom:1px solid #e0e8f5;color:#0a7040;font-weight:800;">${fmt(rem)}</td>
+    </tr>`;
+  });
+
+  const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>ملخص اليوم — ${dateLabel}</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4 portrait; margin: 15mm 12mm 12mm; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Tajawal',sans-serif; color:#111; background:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .wrap { max-width:740px; margin:0 auto; }
+  .hdr { background:linear-gradient(135deg,#1a3a6e,#2060d0); border-radius:14px; padding:18px 24px; margin-bottom:20px; color:#fff; display:flex; align-items:center; justify-content:space-between; }
+  .hdr-left h1 { font-size:20px; font-weight:900; }
+  .hdr-left p  { font-size:12px; opacity:0.8; margin-top:4px; }
+  .hdr-right { text-align:left; }
+  .hdr-right .date-badge { background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.3); border-radius:20px; padding:5px 16px; font-size:13px; font-weight:700; }
+  .section-title { font-size:14px; font-weight:800; color:#1a3a6e; margin-bottom:10px; padding-bottom:6px; border-bottom:2px solid #2060d0; }
+  table { width:100%; border-collapse:collapse; margin-bottom:20px; }
+  thead th { background:linear-gradient(90deg,#1a3a6e,#2060d0); color:#fff; padding:10px 14px; font-weight:700; font-size:13px; text-align:center; }
+  thead th:first-child { text-align:right; border-radius:0 8px 0 0; }
+  thead th:last-child  { border-radius:8px 0 0 0; }
+  tbody tr:nth-child(even) { background:#f5f8ff; }
+  .total-row td { background:linear-gradient(90deg,#e8f0ff,#f0f5ff); font-weight:900; font-size:14px; border-top:2px solid #2060d0; padding:11px 14px; text-align:center; }
+  .total-row td:first-child { text-align:right; color:#1a3a6e; }
+  .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+  .card { border-radius:12px; padding:14px 18px; text-align:center; }
+  .card.blue   { background:#eef4ff; border:1.5px solid #a0c0f0; }
+  .card.orange { background:#fff4ee; border:1.5px solid #f0c0a0; }
+  .card.green  { background:#edfff4; border:1.5px solid #a0e0b8; }
+  .card-lbl { font-size:11px; color:#666; margin-bottom:5px; }
+  .card-val { font-size:22px; font-weight:900; }
+  .card.blue   .card-val { color:#1a5ab0; }
+  .card.orange .card-val { color:#c04010; }
+  .card.green  .card-val { color:#0a7040; }
+  .footer { text-align:center; margin-top:14px; padding-top:10px; border-top:1.5px solid #2060d0; font-size:11px; color:#666; }
+  .accent-line { height:3px; background:linear-gradient(90deg,#f0b830,#3d8ef0,#20d070); border-radius:3px; margin-bottom:20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <div class="hdr-left">
+      <h1>${systemIcon} ${systemTitle}</h1>
+      <p>ملخص يومي شامل لجميع المعامل</p>
+    </div>
+    <div class="hdr-right">
+      <div class="date-badge">📅 ${dateLabel}</div>
+    </div>
+  </div>
+  <div class="accent-line"></div>
+
+  <div class="section-title">📊 ملخص اليوم — جميع المعامل</div>
+  <table>
+    <thead>
+      <tr>
+        <th>المعمل</th>
+        <th>🚛 سيارات واردة</th>
+        <th>📥 كمية واردة (طن)</th>
+        <th>🚛 سيارات صادرة</th>
+        <th>📤 كمية صادرة (طن)</th>
+        <th>⚖️ المتبقي التراكمي (طن)</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${tableRows}
+      <tr class="total-row">
+        <td>📊 الإجمالي</td>
+        <td style="color:#1a5ab0;">${fmt(grandCIn)}</td>
+        <td style="color:#1a5ab0;">${fmt(grandIn)}</td>
+        <td style="color:#c04010;">${fmt(grandCOut)}</td>
+        <td style="color:#c04010;">${fmt(grandOut)}</td>
+        <td style="color:#0a7040;">${fmt(grandRem)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="cards">
+    <div class="card blue">
+      <div class="card-lbl">📥 إجمالي الوارد</div>
+      <div class="card-val">${fmt(grandIn)}</div>
+      <div style="font-size:11px;color:#1a5ab0;margin-top:3px;">${fmt(grandCIn)} سيارة</div>
+    </div>
+    <div class="card orange">
+      <div class="card-lbl">📤 إجمالي الصادر</div>
+      <div class="card-val">${fmt(grandOut)}</div>
+      <div style="font-size:11px;color:#c04010;margin-top:3px;">${fmt(grandCOut)} سيارة</div>
+    </div>
+    <div class="card green">
+      <div class="card-lbl">⚖️ إجمالي المتبقي</div>
+      <div class="card-val">${fmt(grandRem)}</div>
+      <div style="font-size:11px;color:#0a7040;margin-top:3px;">طن متراكم</div>
+    </div>
+  </div>
+
+  <div class="footer">${systemIcon} ${systemTitle} &nbsp;|&nbsp; تاريخ الطباعة: ${printDate}</div>
+</div>
+<script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}<\/script>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank', 'width=850,height=650');
+  win.document.write(html);
+  win.document.close();
+}
+
+// ════════════════════════════════════════════════
+// SAVE DAILY SUMMARY AS PDF
+// ════════════════════════════════════════════════
+function saveDailySummaryPDF() {
+  const systemTitle = document.getElementById('system-title').textContent;
+  const systemIcon  = document.querySelector('.hdr-icon').textContent;
+  const dateLabel   = document.getElementById('selected-date-label').textContent;
+  const printDate   = new Date().toLocaleDateString('ar-IQ', {year:'numeric',month:'long',day:'numeric'});
+  const dateStr     = selectedDate || new Date().toISOString().slice(0,10);
+
+  showToast('⏳ جاري إنشاء PDF ملخص اليوم...', 'success');
+
+  let tableRows = '';
+  let grandIn=0, grandOut=0, grandRem=0, grandCIn=0, grandCOut=0;
+  FACTORIES.forEach(f => {
+    const row = getRow(f.id, selectedDate) || {};
+    const rem = Math.max(0, getCumulative(f.id, selectedDate));
+    const cIn  = row.cars_in  || 0;
+    const qIn  = row.qty_in   || 0;
+    const cOut = row.cars_out || 0;
+    const qOut = row.qty_out  || 0;
+    grandIn  += qIn;  grandOut += qOut; grandRem += rem;
+    grandCIn += cIn;  grandCOut += cOut;
+    tableRows += '<tr>' +
+      '<td style="text-align:right;font-weight:700;padding:10px 16px;border-bottom:1px solid #e0e8f5;">' +
+        '<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:' + f.color + ';margin-left:8px;vertical-align:middle;"></span>' + f.name +
+      '</td>' +
+      '<td style="text-align:center;padding:10px 16px;border-bottom:1px solid #e0e8f5;color:#1a5ab0;font-weight:700;">' + fmt(cIn) + '</td>' +
+      '<td style="text-align:center;padding:10px 16px;border-bottom:1px solid #e0e8f5;color:#1a5ab0;font-weight:800;">' + fmt(qIn) + '</td>' +
+      '<td style="text-align:center;padding:10px 16px;border-bottom:1px solid #e0e8f5;color:#c04010;font-weight:700;">' + fmt(cOut) + '</td>' +
+      '<td style="text-align:center;padding:10px 16px;border-bottom:1px solid #e0e8f5;color:#c04010;font-weight:800;">' + fmt(qOut) + '</td>' +
+      '<td style="text-align:center;padding:10px 16px;border-bottom:1px solid #e0e8f5;color:#0a7040;font-weight:800;">' + fmt(rem) + '</td>' +
+    '</tr>';
+  });
+
+  const totalRow =
+    '<tr style="background:linear-gradient(90deg,#dce8ff,#e8f5ee);font-weight:900;font-size:14px;border-top:2.5px solid #2060d0;">' +
+      '<td style="text-align:right;padding:12px 16px;color:#1a3a6e;">📊 الإجمالي</td>' +
+      '<td style="text-align:center;padding:12px 16px;color:#1a5ab0;">' + fmt(grandCIn) + '</td>' +
+      '<td style="text-align:center;padding:12px 16px;color:#1a5ab0;">' + fmt(grandIn) + '</td>' +
+      '<td style="text-align:center;padding:12px 16px;color:#c04010;">' + fmt(grandCOut) + '</td>' +
+      '<td style="text-align:center;padding:12px 16px;color:#c04010;">' + fmt(grandOut) + '</td>' +
+      '<td style="text-align:center;padding:12px 16px;color:#0a7040;">' + fmt(grandRem) + '</td>' +
+    '</tr>';
+
+  const html = '<!DOCTYPE html>' +
+'<html lang="ar" dir="rtl"><head><meta charset="UTF-8">' +
+'<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&display=swap" rel="stylesheet">' +
+'<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>' +
+'<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>' +
+'<style>' +
+'@import url(https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&display=swap);' +
+'*{box-sizing:border-box;margin:0;padding:0;}' +
+'body{font-family:Tajawal,sans-serif;color:#111;background:#fff;width:820px;padding:24px 28px;-webkit-font-smoothing:antialiased;}' +
+'.wrap{width:100%;}' +
+'.hdr{background:linear-gradient(135deg,#1a3a6e,#2060d0);border-radius:14px;padding:20px 26px;margin-bottom:6px;color:#fff;display:flex;align-items:center;justify-content:space-between;}' +
+'.hdr h1{font-size:22px;font-weight:900;}' +
+'.hdr p{font-size:13px;opacity:.8;margin-top:5px;}' +
+'.date-badge{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);border-radius:20px;padding:6px 18px;font-size:14px;font-weight:700;}' +
+'.accent-line{height:4px;background:linear-gradient(90deg,#f0b830,#3d8ef0,#20d070);border-radius:3px;margin:14px 0 18px;}' +
+'.sec-title{font-size:15px;font-weight:800;color:#1a3a6e;margin-bottom:12px;padding-bottom:7px;border-bottom:2px solid #2060d0;}' +
+'table{width:100%;border-collapse:collapse;margin-bottom:22px;}' +
+'thead th{background:linear-gradient(90deg,#1a3a6e,#2060d0);color:#fff;padding:12px 16px;font-weight:800;font-size:13px;text-align:center;white-space:nowrap;font-family:Tajawal,sans-serif;}' +
+'thead th:first-child{text-align:right;}' +
+'tbody tr:nth-child(even){background:#f5f8ff;}' +
+'.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px;}' +
+'.card{border-radius:14px;padding:16px 20px;text-align:center;}' +
+'.card.b{background:#eef4ff;border:2px solid #a0c0f0;}' +
+'.card.o{background:#fff4ee;border:2px solid #f0c0a0;}' +
+'.card.g{background:#edfff4;border:2px solid #a0e0b8;}' +
+'.card-lbl{font-size:12px;color:#555;margin-bottom:6px;font-weight:600;}' +
+'.card-val{font-size:26px;font-weight:900;}' +
+'.card-sub{font-size:12px;margin-top:4px;font-weight:600;}' +
+'.b .card-val,.b .card-sub{color:#1a5ab0;}' +
+'.o .card-val,.o .card-sub{color:#c04010;}' +
+'.g .card-val,.g .card-sub{color:#0a7040;}' +
+'.footer{text-align:center;margin-top:10px;padding-top:10px;border-top:2px solid #2060d0;font-size:12px;color:#666;}' +
+'<\/style></head><body><div class="wrap">' +
+'<div class="hdr"><div>' +
+'<h1>' + systemIcon + ' ' + systemTitle + '</h1>' +
+'<p>ملخص يومي شامل لجميع المعامل</p></div>' +
+'<div><div class="date-badge">📅 ' + dateLabel + '</div></div></div>' +
+'<div class="accent-line"></div>' +
+'<div class="sec-title">📊 ملخص اليوم — جميع المعامل</div>' +
+'<table><thead><tr>' +
+'<th>المعمل</th><th>🚛 سيارات واردة</th><th>📥 كمية واردة (طن)</th>' +
+'<th>🚛 سيارات صادرة</th><th>📤 كمية صادرة (طن)</th><th>⚖️ المتبقي التراكمي (طن)</th>' +
+'</tr></thead><tbody>' + tableRows + totalRow + '</tbody></table>' +
+'<div class="cards">' +
+'<div class="card b"><div class="card-lbl">📥 إجمالي الوارد</div><div class="card-val">' + fmt(grandIn) + '</div><div class="card-sub">' + fmt(grandCIn) + ' سيارة</div></div>' +
+'<div class="card o"><div class="card-lbl">📤 إجمالي الصادر</div><div class="card-val">' + fmt(grandOut) + '</div><div class="card-sub">' + fmt(grandCOut) + ' سيارة</div></div>' +
+'<div class="card g"><div class="card-lbl">⚖️ إجمالي المتبقي</div><div class="card-val">' + fmt(grandRem) + '</div><div class="card-sub">طن متراكم</div></div>' +
+'</div>' +
+'<div class="footer">' + systemIcon + ' ' + systemTitle + ' | تاريخ الإصدار: ' + printDate + '</div>' +
+'</div>' +
+'<script>window.onload=function(){setTimeout(function(){' +
+'var jsPDF=window.jspdf.jsPDF;' +
+'var wrap=document.querySelector(".wrap");' +
+'html2canvas(wrap,{scale:3,useCORS:true,logging:false,backgroundColor:"#ffffff",allowTaint:true}).then(function(canvas){' +
+'var doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});' +
+'var margin=12,cW=210-margin*2,cH=297-margin*2;' +
+'var iW=canvas.width,iH=canvas.height,iHmm=(iH/iW)*cW;' +
+'var pages=Math.ceil(iHmm/cH);' +
+'for(var p=0;p<pages;p++){' +
+'if(p>0)doc.addPage();' +
+'var sy=(p*cH/iHmm)*iH,sh=Math.min((cH/iHmm)*iH,iH-sy);' +
+'var pc=document.createElement("canvas");pc.width=iW;pc.height=sh;' +
+'pc.getContext("2d").drawImage(canvas,0,sy,iW,sh,0,0,iW,sh);' +
+'doc.addImage(pc.toDataURL("image/jpeg",0.97),"JPEG",margin,margin,cW,(sh/iW)*cW);}' +
+'doc.save("ملخص-اليوم_' + dateStr + '.pdf");' +
+'});},1500);};<\/script></body></html>';
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:920px;height:100px;opacity:0;pointer-events:none;border:none;';
+  document.body.appendChild(iframe);
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  iframe.src = url;
+  const cleanup = setTimeout(function() {
+    if (document.body.contains(iframe)) document.body.removeChild(iframe);
+    URL.revokeObjectURL(url);
+    showToast('✅ تم حفظ ملخص اليوم PDF بنجاح!', 'success');
+  }, 13000);
+  iframe.onload = function() {
+    setTimeout(function() {
+      if (document.body.contains(iframe)) document.body.removeChild(iframe);
+      URL.revokeObjectURL(url);
+      clearTimeout(cleanup);
+      showToast('✅ تم حفظ ملخص اليوم PDF بنجاح!', 'success');
+    }, 11000);
+  };
+}
+
+// ════════════════════════════════════════════════
+// PASSWORD SYSTEM
+// ════════════════════════════════════════════════
+let passCallback = null;
+let passMode = 'check'; // 'check' | 'set' | 'change'
+
+function getPassword() {
+  return localStorage.getItem(PASS_KEY) || '';
+}
+
+function requirePass(callback, title='رمز السر مطلوب', desc='أدخل رمز السر للمتابعة') {
+  const stored = getPassword();
+  if (!stored) { callback(); return; } // no password set yet
+  passCallback = callback;
+  passMode = 'check';
+  document.getElementById('pass-modal-title').textContent = title;
+  document.getElementById('pass-modal-desc').textContent = desc;
+  document.getElementById('pass-input').value = '';
+  document.getElementById('pass-error').textContent = '';
+  document.getElementById('pass-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('pass-input').focus(), 100);
+}
+
+function confirmPass() {
+  const val = document.getElementById('pass-input').value;
+  const stored = getPassword();
+  if (passMode === 'check') {
+    if (val === stored) {
+      document.getElementById('pass-modal').style.display = 'none';
+      if (passCallback) { passCallback(); passCallback = null; }
+    } else {
+      document.getElementById('pass-error').textContent = '❌ رمز السر غير صحيح';
+      document.getElementById('pass-input').select();
+    }
+  } else if (passMode === 'set' || passMode === 'change') {
+    if (!val || val.length < 4) {
+      document.getElementById('pass-error').textContent = '⚠️ الرمز يجب أن يكون 4 أحرف على الأقل';
+      return;
+    }
+    localStorage.setItem(PASS_KEY, val);
+    document.getElementById('pass-modal').style.display = 'none';
+    showToast('✅ تم تعيين رمز السر بنجاح', 'success');
+  }
+}
+
+function cancelPass() {
+  document.getElementById('pass-modal').style.display = 'none';
+  passCallback = null;
+}
+
+function openChangePassModal() {
+  const stored = getPassword();
+  if (stored) {
+    // Must verify old password first
+    passMode = 'check';
+    passCallback = () => {
+      passMode = 'set';
+      document.getElementById('pass-modal-title').textContent = 'تعيين رمز سر جديد';
+      document.getElementById('pass-modal-desc').textContent = 'أدخل الرمز الجديد (4 أحرف على الأقل)';
+      document.getElementById('pass-input').value = '';
+      document.getElementById('pass-error').textContent = '';
+      document.getElementById('pass-modal').style.display = 'flex';
+      setTimeout(() => document.getElementById('pass-input').focus(), 100);
+    };
+    document.getElementById('pass-modal-title').textContent = 'التحقق من الرمز الحالي';
+    document.getElementById('pass-modal-desc').textContent = 'أدخل رمز السر الحالي أولاً';
+    document.getElementById('pass-input').value = '';
+    document.getElementById('pass-error').textContent = '';
+    document.getElementById('pass-modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('pass-input').focus(), 100);
+  } else {
+    passMode = 'set';
+    document.getElementById('pass-modal-title').textContent = 'تعيين رمز سر جديد';
+    document.getElementById('pass-modal-desc').textContent = 'أدخل رمز السر المطلوب (4 أحرف على الأقل)';
+    document.getElementById('pass-input').value = '';
+    document.getElementById('pass-error').textContent = '';
+    document.getElementById('pass-modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('pass-input').focus(), 100);
+  }
+}
+
+// Protect saveEntry and clearEntry with password
+const _origSaveEntry = window.saveEntry;
+const _origClearEntry = window.clearEntry;
+
+// ════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════
+let data = {};   // { factoryId: { prevMonth, rows: [{date, cars_in, qty_in, cars_out, qty_out, notes}] } }
+let activeTab = 'all';  // 'all' or factoryId
+let selectedDate = todayStr();
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function loadData() {
+  // تحميل من localStorage أولاً (سريع)
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      data = parsed;
+      for (const [id, raw] of Object.entries(RAW_DATA)) {
+        if (!data[id]) {
+          data[id] = { prevMonth: raw.prevMonth, rows: [...raw.rows] };
+        }
+      }
+    } else {
+      initData();
+    }
+  } catch(e) {
+    initData();
+  }
+
+  // ثم الاستماع لـ Firebase للمزامنة الفورية
+  function setupFirebaseSync() {
+    if (window._fbListen) {
+      window._fbListen('data', function(fbData) {
+        if (!fbData || typeof fbData !== 'object' || Object.keys(fbData).length === 0) return;
+        const hasReal = Object.values(fbData).some(f =>
+          f && (f.prevMonth > 0 || (f.rows && f.rows.some(r => r.qty_in > 0 || r.qty_out > 0)))
+        );
+        if (!hasReal) return;
+        data = fbData;
+        for (const [id, raw] of Object.entries(RAW_DATA)) {
+          if (!data[id]) data[id] = { prevMonth: raw.prevMonth, rows: [...raw.rows] };
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        render();
+      });
+    } else {
+      // انتظر حتى يصبح Firebase جاهزاً
+      window.addEventListener('firebaseReady', function() {
+        setupFirebaseSync();
+      }, { once: true });
+    }
+  }
+  setupFirebaseSync();
+}
+
+function initData() {
+  data = {};
+  for (const [id, raw] of Object.entries(RAW_DATA)) {
+    data[id] = { prevMonth: raw.prevMonth, rows: raw.rows.map(r => ({...r})) };
+  }
+}
+
+function saveData() {
+  if (window.VIEW_ONLY) return; // لا حفظ في وضع المشاهدة
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  // حفظ إلى Firebase للمزامنة بين الأجهزة
+  if (window._fbSave) {
+    try { window._fbSave('data', JSON.parse(JSON.stringify(data))); } catch(e) {}
+  }
+}
+
+// ════════════════════════════════════════════════
+// DATE HELPERS
+// ════════════════════════════════════════════════
+function getRow(factoryId, dateStr) {
+  return data[factoryId]?.rows.find(r => r.date === dateStr) || null;
+}
+
+function setRow(factoryId, dateStr, fields) {
+  let row = data[factoryId].rows.find(r => r.date === dateStr);
+  if (!row) {
+    row = { idx: data[factoryId].rows.length + 1, date: dateStr, cars_in: 0, qty_in: 0, cars_out: 0, qty_out: 0, notes: '' };
+    data[factoryId].rows.push(row);
+    data[factoryId].rows.sort((a, b) => a.date.localeCompare(b.date));
+  }
+  Object.assign(row, fields);
+  saveData();
+}
+
+// Compute cumulative remaining up to (and including) dateStr
+function getCumulative(factoryId, upToDate) {
+  const d = data[factoryId];
+  if (!d) return 0;
+  let rem = d.prevMonth;
+  for (const r of d.rows) {
+    if (r.date > upToDate) break;
+    rem += (r.qty_in || 0) - (r.qty_out || 0);
+  }
+  return rem;
+}
+
+function getTotalIn(factoryId, upToDate) {
+  const d = data[factoryId];
+  if (!d) return 0;
+  return d.rows.filter(r => r.date <= upToDate).reduce((s, r) => s + (r.qty_in || 0), 0);
+}
+function getTotalOut(factoryId, upToDate) {
+  const d = data[factoryId];
+  if (!d) return 0;
+  return d.rows.filter(r => r.date <= upToDate).reduce((s, r) => s + (r.qty_out || 0), 0);
+}
+function getTotalCarsIn(factoryId, upToDate) {
+  const d = data[factoryId];
+  if (!d) return 0;
+  return d.rows.filter(r => r.date <= upToDate).reduce((s, r) => s + (r.cars_in || 0), 0);
+}
+function getTotalCarsOut(factoryId, upToDate) {
+  const d = data[factoryId];
+  if (!d) return 0;
+  return d.rows.filter(r => r.date <= upToDate).reduce((s, r) => s + (r.cars_out || 0), 0);
+}
+
+// ════════════════════════════════════════════════
+// FORMAT
+// ════════════════════════════════════════════════
+function fmt(n) {
+  return Number(n || 0).toLocaleString('en-US');
+}
+function fmtDate(str) {
+  if (!str) return '—';
+  const d = new Date(str + 'T00:00:00');
+  return d.toLocaleDateString('ar-IQ', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' });
+}
+function arDay(str) {
+  const days = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  const d = new Date(str + 'T00:00:00');
+  return days[d.getDay()];
+}
+
+// ════════════════════════════════════════════════
+// TANK SVG RENDERER
+// ════════════════════════════════════════════════
+function makeTank(fillRatio, color, lightColor, uid, size='normal') {
+  const W = size === 'small' ? 100 : 120;
+  const H = size === 'small' ? 160 : 195;
+  const bw = size === 'small' ? 68 : 84;
+  const bh = size === 'small' ? 84 : 108;
+  const bx = (W - bw) / 2;
+  const by = size === 'small' ? 36 : 42;
+  const domeRy = size === 'small' ? 12 : 16;
+  const legH = size === 'small' ? 14 : 18;
+  const legW = size === 'small' ? 8 : 10;
+  const cx = W / 2;
+
+  const cf = Math.max(0, Math.min(1, fillRatio));
+  const fillH = bh * cf;
+  const fillY = by + bh - fillH;
+  const pct = Math.round(cf * 100);
+  const cid = 'clip_' + uid;
+
+  const tc = cf > 0.25 ? '#fff' : lightColor;
+  const ty = cf > 0.25 ? fillY + fillH / 2 + 5 : by + bh / 2 + 5;
+
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <clipPath id="${cid}"><rect x="${bx+1}" y="${by+1}" width="${bw-2}" height="${bh-2}" rx="6"/></clipPath>
+      <linearGradient id="grad_${uid}" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.95"/>
+        <stop offset="100%" stop-color="${lightColor}" stop-opacity="0.8"/>
+      </linearGradient>
+    </defs>
+    <!-- Shadow -->
+    <ellipse cx="${cx+2}" cy="${by+bh+3}" rx="${bw*0.55}" ry="6" fill="rgba(0,0,0,0.5)"/>
+    <!-- Legs -->
+    <rect x="${cx-bw*0.28-legW/2}" y="${by+bh}" width="${legW}" height="${legH}" fill="#1a2235" rx="2"/>
+    <rect x="${cx+bw*0.28-legW/2}" y="${by+bh}" width="${legW}" height="${legH}" fill="#1a2235" rx="2"/>
+    <rect x="${bx-8}" y="${by+bh+legH}" width="${bw+16}" height="7" fill="#141c28" rx="3"/>
+    <!-- Pipe top -->
+    <rect x="${cx-4}" y="${by-domeRy-16}" width="8" height="16" fill="#1a2235" rx="3"/>
+    <rect x="${cx-15}" y="${by-domeRy-21}" width="30" height="7" fill="#111820" rx="3"/>
+    <!-- Bolt decoration -->
+    ${[0.1,0.9].map(fx => [0.15,0.5,0.85].map(fy => `<circle cx="${bx+bw*fx}" cy="${by+bh*fy}" r="3" fill="#1a2235" stroke="#2a3550" stroke-width="1"/>`).join('')).join('')}
+    <!-- Gauge markings -->
+    <line x1="${bx-3}" y1="${by}" x2="${bx-8}" y2="${by}" stroke="#2a3550" stroke-width="1"/>
+    <line x1="${bx-3}" y1="${by+bh*0.25}" x2="${bx-7}" y2="${by+bh*0.25}" stroke="#2a3550" stroke-width="1"/>
+    <line x1="${bx-3}" y1="${by+bh*0.5}" x2="${bx-8}" y2="${by+bh*0.5}" stroke="#2a3550" stroke-width="1"/>
+    <line x1="${bx-3}" y1="${by+bh*0.75}" x2="${bx-7}" y2="${by+bh*0.75}" stroke="#2a3550" stroke-width="1"/>
+    <line x1="${bx-3}" y1="${by+bh}" x2="${bx-8}" y2="${by+bh}" stroke="#2a3550" stroke-width="1"/>
+    <!-- Tank body -->
+    <rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="8" fill="#0f1825" stroke="#2a3550" stroke-width="1.5"/>
+    <!-- Liquid fill -->
+    ${cf > 0 ? `
+    <rect x="${bx+1}" y="${fillY}" width="${bw-2}" height="${fillH}" fill="url(#grad_${uid})" clip-path="url(#${cid})" class="liquid-anim"/>
+    <ellipse cx="${cx}" cy="${fillY}" rx="${(bw-2)/2}" ry="5" fill="${lightColor}" opacity="0.3" clip-path="url(#${cid})"/>
+    <rect x="${bx+bw*0.7}" y="${fillY+5}" width="${bw*0.06}" height="${Math.max(0,fillH-12)}" rx="3" fill="#fff" opacity="0.1" clip-path="url(#${cid})"/>
+    ` : ''}
+    <!-- Tank outline over fill -->
+    <rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="8" fill="none" stroke="#3a5080" stroke-width="1.2"/>
+    <!-- Dome top -->
+    <ellipse cx="${cx}" cy="${by}" rx="${bw/2}" ry="${domeRy}" fill="#0f1825" stroke="#3a5080" stroke-width="1.2"/>
+    <ellipse cx="${cx}" cy="${by}" rx="${bw/2-4}" ry="${domeRy-5}" fill="#172030" opacity="0.6"/>
+    <!-- Shine -->
+    <rect x="${bx+bw*0.78}" y="${by+6}" width="${bw*0.05}" height="${bh-14}" rx="3" fill="#fff" opacity="0.05"/>
+    <!-- Label -->
+    ${pct > 0
+      ? `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="13" font-weight="800" fill="${tc}" font-family="Tajawal,sans-serif">${pct}%</text>`
+      : `<text x="${cx}" y="${by+bh/2+5}" text-anchor="middle" font-size="11" fill="#3a5080" font-family="Tajawal,sans-serif">فارغ</text>`
+    }
+  </svg>`;
+}
+
+// ════════════════════════════════════════════════
+// RENDER
+// ════════════════════════════════════════════════
+let openPanels = {};  // factoryId -> bool
+let openHistory = {}; // factoryId -> bool
+
+function render() {
+  renderHeader();
+  renderTabs();
+  renderDateLabel();
+  renderDailyOverview();
+  renderSummary();
+  renderFactories();
+}
+
+function renderHeader() {
+  document.getElementById('hdr-date').textContent = fmtDate(selectedDate) + ' | ' + arDay(selectedDate);
+  updatePageTitle();
+  // مؤشر حالة المزامنة
+  let syncEl = document.getElementById('sync-status');
+  if (!syncEl) {
+    syncEl = document.createElement('div');
+    syncEl.id = 'sync-status';
+    syncEl.style.cssText = 'position:fixed;bottom:16px;left:16px;background:#1a2235;border:1px solid rgba(100,150,255,0.2);border-radius:20px;padding:6px 14px;font-size:12px;color:#8ba0c0;z-index:9999;font-family:Tajawal,sans-serif;';
+    syncEl.textContent = window._firebaseReady ? '☁️ متصل بـ Google Sheets' : '⏳ جارٍ الاتصال بـ Google Sheets...';
+    document.body.appendChild(syncEl);
+    window.addEventListener('firebaseReady', () => { syncEl.textContent = '☁️ متصل بـ Google Sheets'; syncEl.style.color = '#20d070'; });
+  }
+}
+
+function renderTabs() {
+  const wrap = document.getElementById('tabs-wrap');
+  const tabs = [{ id: 'all', name: '🏭 جميع المعامل' }, ...FACTORIES.map(f => ({ id: f.id, name: f.name }))];
+  wrap.innerHTML = tabs.map(t => `
+    <button class="tab-btn ${activeTab === t.id ? 'active' : ''}" onclick="setTab('${t.id}')">${t.name}</button>
+  `).join('');
+}
+
+function renderDateLabel() {
+  document.getElementById('selected-date-label').textContent = fmtDate(selectedDate);
+  document.getElementById('date-picker').value = selectedDate;
+}
+
+function renderDailyOverview() {
+  const tbody = document.getElementById('daily-tbody');
+  const tfoot = document.getElementById('daily-tfoot');
+  const factories = activeTab === 'all' ? FACTORIES : FACTORIES.filter(f => f.id === activeTab);
+  let totCarsIn=0, totQtyIn=0, totCarsOut=0, totQtyOut=0, totRem=0;
+  const rows = factories.map(f => {
+    const row = getRow(f.id, selectedDate) || {};
+    const rem = getCumulative(f.id, selectedDate);
+    totCarsIn  += (row.cars_in  || 0);
+    totQtyIn   += (row.qty_in   || 0);
+    totCarsOut += (row.cars_out || 0);
+    totQtyOut  += (row.qty_out  || 0);
+    totRem     += Math.max(0, rem);
+    return `<tr>
+      <td class="factory-name-cell">
+        <span class="factory-dot-inline" style="background:${f.color};box-shadow:0 0 6px ${f.color}"></span>
+        ${f.name}
+      </td>
+      <td class="cars-val">${fmt(row.cars_in || 0)}</td>
+      <td class="in-val">${fmt(row.qty_in || 0)}</td>
+      <td class="cars-val">${fmt(row.cars_out || 0)}</td>
+      <td class="out-val">${fmt(row.qty_out || 0)}</td>
+      <td class="rem-val">${fmt(Math.max(0, rem))}</td>
+    </tr>`;
+  });
+  tbody.innerHTML = rows.join('');
+  // Totals row in tfoot
+  if (tfoot) {
+    tfoot.innerHTML = `<tr class="daily-total-row">
+      <td class="factory-name-cell" style="font-weight:900;">📊 الإجمالي</td>
+      <td class="cars-val" style="font-weight:900;">${fmt(totCarsIn)}</td>
+      <td class="in-val" style="font-weight:900;">${fmt(totQtyIn)}</td>
+      <td class="cars-val" style="font-weight:900;">${fmt(totCarsOut)}</td>
+      <td class="out-val" style="font-weight:900;">${fmt(totQtyOut)}</td>
+      <td class="rem-val" style="font-weight:900;">${fmt(totRem)}</td>
+    </tr>`;
+  }
+}
+
+function renderSummary() {
+  const factories = activeTab === 'all' ? FACTORIES : FACTORIES.filter(f => f.id === activeTab);
+  let totIn = 0, totOut = 0, totRem = 0, totCarsIn = 0, totCarsOut = 0;
+  factories.forEach(f => {
+    const row = getRow(f.id, selectedDate) || {};
+    totIn      += (row.qty_in   || 0);
+    totOut     += (row.qty_out  || 0);
+    totCarsIn  += (row.cars_in  || 0);
+    totCarsOut += (row.cars_out || 0);
+    totRem     += Math.max(0, getCumulative(f.id, selectedDate));
+  });
+  document.getElementById('tot-in').textContent = fmt(totIn) + ' طن';
+  document.getElementById('tot-out').textContent = fmt(totOut) + ' طن';
+  document.getElementById('tot-rem').textContent = fmt(totRem) + ' طن';
+  document.getElementById('tot-in-cars').textContent = fmt(totCarsIn) + ' سيارة واردة';
+  document.getElementById('tot-out-cars').textContent = fmt(totCarsOut) + ' سيارة صادرة';
+}
+
+function renderFactories() {
+  const wrap = document.getElementById('factories-wrap');
+  const factories = activeTab === 'all' ? FACTORIES : FACTORIES.filter(f => f.id === activeTab);
+  wrap.innerHTML = factories.map((f, fi) => renderFactory(f, fi)).join('');
+}
+
+function renderFactory(f, fi) {
+  const row = getRow(f.id, selectedDate) || {};
+  const rem = getCumulative(f.id, selectedDate);
+  const totIn = getTotalIn(f.id, selectedDate);
+  const totOut = getTotalOut(f.id, selectedDate);
+
+  const fillIn = Math.min(1, totIn / TANK_CAP);
+  const fillOut = Math.min(1, totOut / TANK_CAP);
+  const fillRem = Math.max(0, Math.min(1, rem / TANK_CAP));
+
+  const statusText = rem < 0 ? '⚠️ نقص' : rem < 50000 ? '🟡 منخفض' : '🟢 طاقة كافية';
+  const statusClass = rem < 0 ? 'danger' : rem < 50000 ? 'warn' : 'ok';
+
+  const histOpen = openHistory[f.id] || false;
+  const panelOpen = openPanels[f.id] !== false; // default open
+
+  return `<div class="factory-panel" id="fp_${f.id}">
+    <div class="fp-header" onclick="togglePanel('${f.id}')">
+      <span class="fp-dot" style="background:${f.color};color:${f.color}"></span>
+      <span class="fp-name">${f.name}</span>
+      <span class="fp-month">${f.month}</span>
+      <span class="fp-status ${statusClass}">${statusText}</span>
+      <button class="nav-btn" style="font-size:12px;padding:4px 12px;" onclick="event.stopPropagation();toggleEntry('${f.id}')">✏️ تسجيل</button>
+      <span class="fp-toggle ${panelOpen ? 'open' : ''}">▼</span>
+    </div>
+    ${panelOpen ? `
+    <div class="tanks-row">
+      <div class="tank-col">
+        <div class="tank-lbl" style="color:#3d8ef0">📥 خزان الوارد</div>
+        ${makeTank(fillIn, '#1a5ab0', '#3d8ef0', f.id+'_in')}
+        <div class="tank-qty" style="color:#3d8ef0">${fmt(totIn)} طن</div>
+        <div class="tank-cars-row"><span>🚛</span><span class="tank-cars-num">${fmt(getTotalCarsIn(f.id, selectedDate))}</span><span>سيارة</span></div>
+        <div class="tank-pct-bar"><div class="tank-pct-fill" style="width:${(fillIn*100).toFixed(1)}%;background:linear-gradient(90deg,#1a5ab0,#3d8ef0)"></div></div>
+      </div>
+      <div class="tank-col">
+        <div class="tank-lbl" style="color:#f07030">📤 خزان الصادر</div>
+        ${makeTank(fillOut, '#a03010', '#f07030', f.id+'_out')}
+        <div class="tank-qty" style="color:#f07030">${fmt(totOut)} طن</div>
+        <div class="tank-cars-row"><span>🚛</span><span class="tank-cars-num">${fmt(getTotalCarsOut(f.id, selectedDate))}</span><span>سيارة</span></div>
+        <div class="tank-pct-bar"><div class="tank-pct-fill" style="width:${(fillOut*100).toFixed(1)}%;background:linear-gradient(90deg,#a03010,#f07030)"></div></div>
+      </div>
+      <div class="tank-col">
+        <div class="tank-lbl" style="color:#20d070">⚖️ خزان المتبقي</div>
+        ${makeTank(fillRem, '#0a6030', '#20d070', f.id+'_rem')}
+        <div class="tank-qty" style="color:#20d070">${fmt(Math.max(0,rem))} طن</div>
+        <div class="tank-cars-row"><span>🚛</span><span class="tank-cars-num">${fmt(rem > 0 ? Math.ceil(Math.max(0,rem)/38000) : 0)}</span><span>سيارة متبقية</span></div>
+        <div class="tank-pct-bar"><div class="tank-pct-fill" style="width:${(fillRem*100).toFixed(1)}%;background:linear-gradient(90deg,#0a6030,#20d070)"></div></div>
+      </div>
+    </div>
+
+    <!-- ENTRY PANEL -->
+    <div class="entry-panel ${openPanels['entry_'+f.id] ? 'open' : ''}" id="ep_${f.id}">
+      <div class="entry-title">✏️ تسجيل بيانات يوم: ${fmtDate(selectedDate)} — ${f.name}</div>
+      <div class="entry-grid">
+        <div>
+          <div class="entry-col-hdr" style="color:#3d8ef0">📥 الوارد</div>
+          <div class="entry-row">
+            <label>عدد السيارات الواردة</label>
+            <input class="entry-input" type="number" id="ei_cin_${f.id}" value="${row.cars_in || 0}" min="0">
+          </div>
+          <div class="entry-row">
+            <label>الكمية الواردة (طن)</label>
+            <input class="entry-input" type="number" id="ei_qin_${f.id}" value="${row.qty_in || 0}" min="0">
+          </div>
+        </div>
+        <div>
+          <div class="entry-col-hdr" style="color:#f07030">📤 الصادر</div>
+          <div class="entry-row">
+            <label>عدد السيارات الصادرة</label>
+            <input class="entry-input" type="number" id="ei_cout_${f.id}" value="${row.cars_out || 0}" min="0">
+          </div>
+          <div class="entry-row">
+            <label>الكمية الصادرة (طن)</label>
+            <input class="entry-input" type="number" id="ei_qout_${f.id}" value="${row.qty_out || 0}" min="0">
+          </div>
+        </div>
+        <div>
+          <div class="entry-col-hdr" style="color:#20d070">📝 ملاحظات</div>
+          <div class="entry-row" style="margin-top:8px;">
+            <label>ملاحظات اليوم</label>
+            <textarea class="entry-input" id="ei_notes_${f.id}" rows="4" style="resize:vertical">${row.notes || ''}</textarea>
+          </div>
+        </div>
+      </div>
+      <div class="entry-actions">
+        <button class="btn-save" onclick="saveEntry('${f.id}')">💾 حفظ البيانات</button>
+        <button class="btn-clear" onclick="clearEntry('${f.id}')">🗑️ مسح</button>
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="history-section">
+      <div class="history-toggle" onclick="toggleHistory('${f.id}')">
+        <span>📋 سجل كامل الشهر — ${data[f.id]?.rows?.length || 0} يوم</span>
+        <span class="ht-arrow ${histOpen ? 'open' : ''}">▼</span>
+      </div>
+      <div class="history-body ${histOpen ? 'open' : ''}">
+        ${renderHistoryTable(f)}
+      </div>
+    </div>
+    ` : ''}
+  </div>`;
+}
+
+function renderHistoryTable(f) {
+  const rows = (data[f.id]?.rows || []).slice().sort((a,b) => a.date.localeCompare(b.date));
+  let running = data[f.id]?.prevMonth || 0;
+  const tableRows = rows.map(r => {
+    running += (r.qty_in || 0) - (r.qty_out || 0);
+    const isToday = r.date === selectedDate;
+    return `<tr class="${isToday ? 'today-row' : ''}">
+      <td>${r.idx}</td>
+      <td class="date-cell">${fmtDate(r.date)}</td>
+      <td class="in-cell">${fmt(r.cars_in)}</td>
+      <td class="in-cell">${fmt(r.qty_in)}</td>
+      <td class="out-cell">${fmt(r.cars_out)}</td>
+      <td class="out-cell">${fmt(r.qty_out)}</td>
+      <td class="rem-cell">${fmt(Math.max(0, running))}</td>
+      <td class="note-cell">${r.notes || ''}</td>
+    </tr>`;
+  });
+  return `<table class="htable">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>التاريخ</th>
+        <th>🚛 س. واردة</th>
+        <th>📥 كمية واردة (طن)</th>
+        <th>🚛 س. صادرة</th>
+        <th>📤 كمية صادرة (طن)</th>
+        <th>⚖️ المتبقي (طن)</th>
+        <th>ملاحظات</th>
+      </tr>
+    </thead>
+    <tbody>${tableRows.join('')}</tbody>
+  </table>`;
+}
+
+// ════════════════════════════════════════════════
+// ACTIONS
+// ════════════════════════════════════════════════
+function setTab(id) {
+  activeTab = id;
+  render();
+}
+
+function navDay(delta) {
+  const parts = selectedDate.split('-');
+  const d = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+  d.setDate(d.getDate() + delta);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  selectedDate = `${yyyy}-${mm}-${dd}`;
+  // Auto-create a blank row for the new date (no month restriction)
+  FACTORIES.forEach(f => {
+    if (!getRow(f.id, selectedDate)) {
+      const rows = data[f.id].rows;
+      const maxIdx = rows.length > 0 ? Math.max(...rows.map(r => r.idx)) : 0;
+      rows.push({ idx: maxIdx + 1, date: selectedDate, cars_in: 0, qty_in: 0, cars_out: 0, qty_out: 0, notes: '' });
+      rows.sort((a, b) => a.date.localeCompare(b.date));
+      rows.forEach((r, i) => r.idx = i + 1);
+    }
+  });
+  saveData();
+  render();
+}
+
+function goToday() {
+  selectedDate = todayStr();
+  render();
+}
+
+function setDateFromPicker(val) {
+  if (val) { selectedDate = val; render(); }
+}
+
+function togglePanel(fid) {
+  openPanels[fid] = !(openPanels[fid] !== false);
+  render();
+}
+
+function toggleEntry(fid) {
+  openPanels['entry_' + fid] = !openPanels['entry_' + fid];
+  // Make sure panel is open
+  openPanels[fid] = true;
+  render();
+  // Scroll to entry panel
+  setTimeout(() => {
+    const ep = document.getElementById('ep_' + fid);
+    if (ep) ep.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 100);
+}
+
+function toggleHistory(fid) {
+  openHistory[fid] = !openHistory[fid];
+  render();
+}
+
+function saveEntry(fid) {
+  const doSave = () => {
+    const cin = parseInt(document.getElementById('ei_cin_' + fid)?.value) || 0;
+    const qin = parseInt(document.getElementById('ei_qin_' + fid)?.value) || 0;
+    const cout = parseInt(document.getElementById('ei_cout_' + fid)?.value) || 0;
+    const qout = parseInt(document.getElementById('ei_qout_' + fid)?.value) || 0;
+    const notes = document.getElementById('ei_notes_' + fid)?.value || '';
+    setRow(fid, selectedDate, { cars_in: cin, qty_in: qin, cars_out: cout, qty_out: qout, notes });
+    showToast('✅ تم حفظ بيانات ' + FACTORIES.find(f=>f.id===fid)?.name + ' ليوم ' + fmtDate(selectedDate), 'success');
+    render();
+  };
+  requirePass(doSave, '🔐 رمز السر مطلوب', 'أدخل رمز السر لحفظ البيانات');
+}
+
+function clearEntry(fid) {
+  requirePass(() => {
+    setRow(fid, selectedDate, { cars_in: 0, qty_in: 0, cars_out: 0, qty_out: 0, notes: '' });
+    showToast('🗑️ تم مسح بيانات اليوم', 'success');
+    render();
+  }, '🔐 رمز السر مطلوب', 'أدخل رمز السر لمسح البيانات');
+}
+
+// ════════════════════════════════════════════════
+// EXCEL EXPORT
+// ════════════════════════════════════════════════
+function exportExcel() {
+  const wb = XLSX.utils.book_new();
+
+  FACTORIES.forEach(f => {
+    const fdata = data[f.id];
+    if (!fdata) return;
+
+    const rows = fdata.rows.slice().sort((a,b) => a.date.localeCompare(b.date));
+    let running = fdata.prevMonth;
+
+    const header = ['#', 'التاريخ', 'اليوم', 'ع. سيارات واردة', 'كمية واردة (طن)', 'ع. سيارات صادرة', 'كمية صادرة (طن)', 'المتبقي التراكمي (طن)', 'ملاحظات'];
+    const dataRows = rows.map(r => {
+      running += (r.qty_in || 0) - (r.qty_out || 0);
+      const d = new Date(r.date + 'T00:00:00');
+      const dayNames = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+      return [
+        r.idx,
+        r.date,
+        dayNames[d.getDay()],
+        r.cars_in || 0,
+        r.qty_in || 0,
+        r.cars_out || 0,
+        r.qty_out || 0,
+        Math.max(0, running),
+        r.notes || ''
+      ];
+    });
+
+    // Totals
+    const totIn = rows.reduce((s,r) => s + (r.qty_in||0), 0);
+    const totOut = rows.reduce((s,r) => s + (r.qty_out||0), 0);
+    const totCIn = rows.reduce((s,r) => s + (r.cars_in||0), 0);
+    const totCOut = rows.reduce((s,r) => s + (r.cars_out||0), 0);
+    dataRows.push(['الإجمالي', '', '', totCIn, totIn, totCOut, totOut, Math.max(0, running), '']);
+
+    const sheetData = [header, ...dataRows];
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+    // Column widths
+    ws['!cols'] = [
+      {wch:5},{wch:14},{wch:12},{wch:16},{wch:18},{wch:16},{wch:18},{wch:22},{wch:20}
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, f.name.substring(0,31));
+  });
+
+  // Summary sheet
+  const sumHeader = ['المعمل', 'إجمالي وارد (طن)', 'إجمالي صادر (طن)', 'المتبقي (طن)', 'ع. سيارات واردة', 'ع. سيارات صادرة', 'سيارات الافتتاحي', 'سيارات المتبقي'];
+  const sumRows = FACTORIES.map(f => {
+    const totIn = getTotalIn(f.id, '9999-12-31');
+    const totOut = getTotalOut(f.id, '9999-12-31');
+    const rem = getCumulative(f.id, '9999-12-31');
+    const cIn = getTotalCarsIn(f.id, '9999-12-31');
+    const cOut = getTotalCarsOut(f.id, '9999-12-31');
+    const carsPrev = data[f.id]?.cars_prev || 0;
+    const carsRem = Math.max(0, carsPrev + cIn - cOut);
+    return [f.name, totIn, totOut, Math.max(0,rem), cIn, cOut, carsPrev, carsRem];
+  });
+  const sumWs = XLSX.utils.aoa_to_sheet([sumHeader, ...sumRows]);
+  sumWs['!cols'] = [{wch:20},{wch:18},{wch:18},{wch:18},{wch:18},{wch:18}];
+  XLSX.utils.book_append_sheet(wb, sumWs, 'ملخص عام');
+
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0,10);
+  XLSX.writeFile(wb, `خزاناتي-${dateStr}.xlsx`);
+  showToast('✅ تم تصدير ملف Excel بنجاح', 'success');
+}
+
+// ════════════════════════════════════════════════
+// PDF SAVE — حفظ مباشر بجودة عالية
+// ════════════════════════════════════════════════
+function printPDF() {
+  // Update footer date
+  const el = document.getElementById('print-date-footer');
+  if (el) el.textContent = new Date().toLocaleDateString('ar-IQ', {year:'numeric',month:'long',day:'numeric'});
+
+  // Open all panels
+  const prevPanels = {...openPanels};
+  const prevHistory = {...openHistory};
+  FACTORIES.forEach(f => {
+    openPanels[f.id] = true;
+    openPanels['entry_' + f.id] = false;
+    openHistory[f.id] = false;
+  });
+  render();
+
+  const dh2 = document.querySelector('.daily-hdr h3');
+  if (dh2) dh2.textContent = '📊 ملخص يوم ' + fmtDate(selectedDate) + ' — جميع المعامل';
+
+  showToast('⏳ جاري إنشاء ملف PDF... قد يستغرق بضع ثوانٍ', 'success');
+
+  const dateStr = selectedDate || new Date().toISOString().slice(0,10);
+
+  setTimeout(() => {
+    // جمع الـ CSS الكامل للصفحة
+    let cssText = '';
+    try {
+      for (const sheet of document.styleSheets) {
+        try {
+          for (const rule of sheet.cssRules) cssText += rule.cssText + '\n';
+        } catch(e) {}
+      }
+    } catch(e) {}
+
+    // الحصول على محتوى HTML الحالي
+    const appHTML = document.querySelector('.app').outerHTML;
+
+    const printHTML = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>خزاناتي_${dateStr}</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap');
+${cssText}
+
+/* ── إعادة تعريف كاملة لأنماط الطباعة ── */
+@page { size: A4 landscape; margin: 10mm 8mm 8mm; }
+* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+body {
+  font-family: 'Tajawal', sans-serif !important;
+  background: #fff !important;
+  color: #111 !important;
+  direction: rtl !important;
+  width: 1400px !important;
+  padding: 20px 24px !important;
+  -webkit-font-smoothing: antialiased !important;
+}
+body::before { display: none !important; }
+
+.app { max-width: 100% !important; padding: 0 !important; }
+
+.tabs-wrap, .date-nav, .export-bar, .toast,
+.fp-toggle, .entry-panel,
+.history-toggle, .history-body,
+.nav-btn, .date-input,
+.summary-grid, .hdr-sub, .tank-pct-bar { display: none !important; }
+
+/* رأس الصفحة */
+.hdr {
+  background: linear-gradient(135deg, #1a3a6e 0%, #2060d0 100%) !important;
+  border: none !important;
+  border-radius: 10px;
+  padding: 14px 20px;
+  margin-bottom: 14px;
+}
+.hdr::before { display: none !important; }
+.hdr h1 { color: #fff !important; font-size: 20px; font-weight: 900; }
+.hdr-date { color: rgba(255,255,255,0.85) !important; background: rgba(255,255,255,0.15) !important; border: 1px solid rgba(255,255,255,0.25) !important; }
+
+/* ملخص اليوم */
+.daily-overview {
+  background: #fff !important;
+  border: 2px solid #2060d0 !important;
+  border-radius: 12px;
+  margin-bottom: 14px;
+  overflow: visible !important;
+}
+.daily-hdr {
+  background: linear-gradient(90deg, #1a3a6e, #2060d0) !important;
+  padding: 10px 18px !important;
+  border-radius: 10px 10px 0 0;
+  border-bottom: 2px solid #2060d0;
+}
+.daily-hdr h3 { color: #fff !important; font-size: 14px !important; font-weight: 900 !important; }
+.daily-hdr button { display: none !important; }
+.daily-table-wrap { overflow: visible !important; }
+.daily-table thead th {
+  background: #2060d0 !important;
+  color: #ffffff !important;
+  border-bottom: 2px solid #1a3a6e !important;
+  padding: 10px 14px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  font-family: 'Tajawal', sans-serif !important;
+  direction: rtl !important;
+  unicode-bidi: embed !important;
+  white-space: nowrap !important;
+  text-shadow: none !important;
+}
+.daily-table tbody td {
+  padding: 9px 14px !important;
+  border-bottom: 1px solid #dde6f5 !important;
+  color: #111 !important;
+  font-family: 'Tajawal', sans-serif !important;
+  font-size: 13px !important;
+}
+.daily-table tbody tr:nth-child(even) { background: #f8faff !important; }
+.factory-name-cell { color: #1a3a6e !important; font-weight: 800 !important; text-align: right !important; }
+.in-val { color: #1a5ab0 !important; }
+.out-val { color: #c04010 !important; }
+.rem-val { color: #0a7040 !important; }
+.cars-val { color: #444 !important; }
+.daily-total-row td {
+  background: linear-gradient(90deg, #e8f0ff, #f0f8e8) !important;
+  font-weight: 900 !important;
+  color: #1a3a6e !important;
+  border-top: 2px solid #2060d0 !important;
+}
+
+/* لوحات المعامل */
+#factories-wrap { page-break-before: always; }
+.factory-panel {
+  background: #fff !important;
+  border: 2px solid #2060d0 !important;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  page-break-inside: avoid;
+  overflow: visible !important;
+  box-shadow: 0 2px 8px rgba(32,96,208,0.12) !important;
+}
+.fp-header {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: linear-gradient(90deg, #f0f5ff, #e8f0ff) !important;
+  border-bottom: 2px solid #2060d0;
+  border-radius: 10px 10px 0 0;
+}
+.fp-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+.fp-name { color: #1a3a6e !important; font-size: 17px; font-weight: 900; flex: 1; }
+.fp-month { background: #2060d0 !important; color: #fff !important; font-size: 11px; padding: 3px 12px; border-radius: 20px; font-weight: 700; }
+.fp-status { display: none !important; }
+.fp-toggle { display: none !important; }
+
+.tanks-row { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; }
+.tank-col { border-left: 1px solid #dde6f5; padding: 14px 10px; background: #fafcff; display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.tank-col:last-child { border-left: none; }
+.tank-lbl { font-size: 13px; font-weight: 800; }
+.tank-qty { font-size: 16px; font-weight: 900; }
+.tank-cars-row { background: #f0f4ff !important; border: 1px solid #c0d0f0 !important; color: #333 !important; border-radius: 20px; padding: 5px 16px; font-size: 13px; }
+.tank-cars-num { color: #111 !important; font-weight: 900; font-size: 15px; }
+.tank-wrap svg { display: block !important; }
+
+/* تذييل */
+.print-footer {
+  display: block !important;
+  text-align: center;
+  margin-top: 14px;
+  padding: 8px 0;
+  border-top: 2px solid #2060d0;
+  color: #666;
+  font-size: 11px;
+}
+
+/* ── وضع المشاهدة فقط ── */
+/* ── وضع المشاهدة فقط — إخفاء كل عناصر التعديل ── */
+body.view-only-mode .export-bar,
+body.view-only-mode .entry-panel,
+body.view-only-mode #lock-screen,
+body.view-only-mode #pass-modal,
+body.view-only-mode #factories-modal,
+body.view-only-mode #month-modal,
+body.view-only-mode #opening-modal,
+body.view-only-mode #edit-title-modal,
+body.view-only-mode #recovery-modal,
+body.view-only-mode #set-recovery-modal,
+body.view-only-mode .btn-save,
+body.view-only-mode .btn-clear,
+body.view-only-mode button[onclick*="toggleEntry"],
+body.view-only-mode button[onclick*="openEdit"],
+body.view-only-mode button[onclick*="openChange"],
+body.view-only-mode button[onclick*="openFactory"],
+body.view-only-mode button[onclick*="openMonth"],
+body.view-only-mode button[onclick*="openSet"],
+body.view-only-mode button[onclick*="openRecovery"],
+body.view-only-mode button[onclick*="openOpening"],
+body.view-only-mode button[onclick*="openManage"],
+body.view-only-mode button[onclick*="openNewMonth"],
+body.view-only-mode button[onclick*="openChangePass"],
+body.view-only-mode button[onclick*="addNew"],
+body.view-only-mode button[onclick*="saveEntry"],
+body.view-only-mode button[onclick*="clearEntry"],
+body.view-only-mode button[onclick*="delete"],
+body.view-only-mode button[onclick*="printPDF"],
+body.view-only-mode button[onclick*="exportExcel"],
+body.view-only-mode button[onclick*="importExcel"],
+body.view-only-mode button[onclick*="saveDailySummaryPDF"],
+body.view-only-mode .action-bar,
+body.view-only-mode #top-controls {
+  display: none !important;
+  pointer-events: none !important;
+}
+body.view-only-mode input,
+body.view-only-mode select,
+body.view-only-mode textarea {
+  pointer-events: none !important;
+  opacity: 0.8;
+}
+</style>
+</head>
+<body>
+${appHTML}
+<script>
+  // تأكد من فتح كل اللوحات
+  document.querySelectorAll('.entry-panel').forEach(p => p.classList.remove('open'));
+  document.querySelectorAll('.history-body').forEach(p => p.classList.remove('open'));
+  document.querySelectorAll('.factory-panel').forEach(p => {
+    const ep = p.querySelector('.entry-panel');
+    const hb = p.querySelector('.history-body');
+    if (ep) ep.style.display = 'none';
+    if (hb) hb.style.display = 'none';
+    // إظهار صف الخزانات
+    const tr = p.querySelector('.tanks-row');
+    if (tr) tr.style.display = 'grid';
+  });
+  // تحديث عنوان الملخص
+  const dh = document.querySelector('.daily-hdr h3');
+  if (dh) dh.style.color = '#fff';
+
+  window.onload = function() {
+    // انتظر تحميل الخط ثم ابدأ التقاط الصورة
+    setTimeout(function() {
+      const { jsPDF } = window.jspdf;
+
+      const pageW = 297; // A4 landscape width mm
+      const pageH = 210; // A4 landscape height mm
+      const margin = 8;
+      const contentW = pageW - margin * 2;
+      const contentH = pageH - margin * 2;
+
+      const captureTarget = document.querySelector('.app') || document.body;
+
+      html2canvas(captureTarget, {
+        scale: 2.8,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        allowTaint: true,
+        scrollX: 0,
+        scrollY: 0,
+        width: captureTarget.scrollWidth,
+        height: captureTarget.scrollHeight
+      }).then(canvas => {
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+        const imgData = canvas.toDataURL('image/jpeg', 0.97);
+        const imgWidthPx = canvas.width;
+        const imgHeightPx = canvas.height;
+
+        // حساب أبعاد الصورة بالمليمتر
+        const imgWidthMM = contentW;
+        const imgHeightMM = (imgHeightPx / imgWidthPx) * contentW;
+
+        // تقسيم الصورة إلى صفحات
+        const totalPages = Math.ceil(imgHeightMM / contentH);
+
+        for (let page = 0; page < totalPages; page++) {
+          if (page > 0) doc.addPage();
+
+          // حساب موضع القطع للصفحة الحالية
+          const srcY = (page * contentH / imgHeightMM) * imgHeightPx;
+          const srcH = Math.min((contentH / imgHeightMM) * imgHeightPx, imgHeightPx - srcY);
+
+          // إنشاء canvas مؤقت للصفحة الحالية
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = imgWidthPx;
+          pageCanvas.height = srcH;
+          const ctx = pageCanvas.getContext('2d');
+          ctx.drawImage(canvas, 0, srcY, imgWidthPx, srcH, 0, 0, imgWidthPx, srcH);
+
+          const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.97);
+          const pageImgH = (srcH / imgWidthPx) * contentW;
+          doc.addImage(pageImgData, 'JPEG', margin, margin, contentW, pageImgH);
+        }
+
+        doc.save('خزاناتي_' + '${dateStr}' + '.pdf');
+      }).catch(err => {
+        console.error('PDF error:', err);
+      });
+    }, 1500);
+  };
+<\/script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>
+</body>
+</html>`;
+
+    const blob = new Blob([printHTML], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    // فتح iframe مخفي لمعالجة PDF
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1400px;height:100px;opacity:0;pointer-events:none;border:none;';
+    document.body.appendChild(iframe);
+    iframe.src = url;
+
+    // مراقبة الـ iframe — سيتم إغلاقه تلقائياً بعد اكتمال التحميل والحفظ
+    const cleanupTimer = setTimeout(() => {
+      if (document.body.contains(iframe)) document.body.removeChild(iframe);
+      URL.revokeObjectURL(url);
+      showToast('✅ تم حفظ ملف PDF بنجاح!', 'success');
+    }, 20000);
+
+    iframe.onload = () => {
+      // بعد تحميل الـ iframe، انتظر اكتمال المعالجة
+      setTimeout(() => {
+        if (document.body.contains(iframe)) document.body.removeChild(iframe);
+        URL.revokeObjectURL(url);
+        clearTimeout(cleanupTimer);
+        showToast('✅ تم حفظ ملف PDF بنجاح!', 'success');
+      }, 18000);
+    };
+
+    setTimeout(() => {
+      Object.assign(openPanels, prevPanels);
+      Object.assign(openHistory, prevHistory);
+      render();
+    }, 400);
+  }, 350);
+}
+
+// ════════════════════════════════════════════════
+// EXCEL IMPORT
+// ════════════════════════════════════════════════
+function importExcel(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      // raw:true so dates come as serial numbers, not converted Date objects
+      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: false, raw: true });
+
+      // Normalize Arabic text for matching (remove diacritics, normalize alef)
+      function normalizeAr(s) {
+        return String(s||'').trim()
+          .replace(/[أإآا]/g, 'ا')
+          .replace(/[ىي]/g, 'ي')
+          .replace(/ة/g, 'ه')
+          .replace(/\s+/g, ' ');
+      }
+
+      function findFactory(sheetName) {
+        const s = normalizeAr(sheetName);
+        let f = FACTORIES.find(f => normalizeAr(f.name) === s);
+        if (f) return f.id;
+        f = FACTORIES.find(f => f.id === sheetName.trim());
+        if (f) return f.id;
+        f = FACTORIES.find(f => s.includes(normalizeAr(f.name)) || normalizeAr(f.name).includes(s));
+        if (f) return f.id;
+        f = FACTORIES.find(f => s.includes(f.id) || f.id.includes(s));
+        if (f) return f.id;
+        return null;
+      }
+
+      // Convert Excel serial date number to YYYY-MM-DD
+      function excelSerialToDate(serial) {
+        if (!serial || typeof serial !== 'number') return null;
+        // Excel serial: days since 1899-12-30
+        const base = new Date(1899, 11, 30);
+        const ms = base.getTime() + serial * 86400000;
+        const d = new Date(ms);
+        const y = d.getFullYear();
+        const m = String(d.getMonth()+1).padStart(2,'0');
+        const dd = String(d.getDate()).padStart(2,'0');
+        return `${y}-${m}-${dd}`;
+      }
+
+      function parseDate(val) {
+        if (!val && val !== 0) return null;
+        // Number — could be Excel serial (typical range 40000-60000 for 2009-2064)
+        if (typeof val === 'number') {
+          if (val > 40000 && val < 60000) return excelSerialToDate(Math.floor(val));
+          return null;
+        }
+        if (val instanceof Date) {
+          if (isNaN(val.getTime())) return null;
+          const y = val.getFullYear();
+          const m = String(val.getMonth()+1).padStart(2,'0');
+          const d = String(val.getDate()).padStart(2,'0');
+          return `${y}-${m}-${d}`;
+        }
+        if (typeof val !== 'string') return null;
+        const s = val.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+        const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+        if (dmy) return `${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
+        const parsed = new Date(s);
+        if (!isNaN(parsed.getTime()) && parsed.getFullYear() > 1900) {
+          return `${parsed.getFullYear()}-${String(parsed.getMonth()+1).padStart(2,'0')}-${String(parsed.getDate()).padStart(2,'0')}`;
+        }
+        return null;
+      }
+
+      const num = v => {
+        if (v === null || v === undefined || v === '') return 0;
+        if (typeof v === 'number') return Math.round(v);
+        const n = parseFloat(String(v).replace(/,/g,'').replace(/٬/g,'').trim());
+        return isNaN(n) ? 0 : Math.round(n);
+      };
+
+      let imported = 0;
+
+      wb.SheetNames.forEach(sheetName => {
+        if (sheetName === 'ملخص عام' || sheetName === 'summary') return;
+
+        const factoryId = findFactory(sheetName);
+        if (!factoryId) return;
+
+        const ws = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+
+        // Find header row: look for row containing '#' in col 0
+        let dataStart = -1;
+        let headerRow = null;
+        for (let i = 0; i < Math.min(rows.length, 10); i++) {
+          const r = rows[i];
+          if (String(r[0]||'').trim() === '#') {
+            dataStart = i + 1;
+            headerRow = r;
+            break;
+          }
+        }
+        if (dataStart === -1) return; // can't find header, skip
+
+        // Build column map from header
+        let col_cars_in=2, col_qty_in=3, col_cars_out=4, col_qty_out=5, col_notes=6;
+        headerRow.forEach((h, idx) => {
+          const hh = String(h||'').trim();
+          if (hh.includes('سيارات') && (hh.includes('وارد') || hh.includes('وارده'))) col_cars_in = idx;
+          else if ((hh.includes('كمية') || hh.includes('الكمية')) && (hh.includes('وارد') || hh.includes('وارده'))) col_qty_in = idx;
+          else if (hh.includes('سيارات') && (hh.includes('صادر') || hh.includes('صادره'))) col_cars_out = idx;
+          else if ((hh.includes('كمية') || hh.includes('الكمية')) && (hh.includes('صادر') || hh.includes('صادره'))) col_qty_out = idx;
+          else if (hh.includes('ملاحظ')) col_notes = idx;
+        });
+
+        // Also look for prevMonth in the sheet (right-side stats area)
+        let prevMonth = data[factoryId]?.prevMonth ?? 0;
+        let carsPrev = data[factoryId]?.cars_prev ?? 0;
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i];
+          for (let c = 0; c < r.length; c++) {
+            const cell = String(r[c]||'').trim();
+            if (cell.includes('المتبقي من الشهر الماضي') || cell.includes('الرصيد الافتتاحي')) {
+              // value is in next row, same column or next column
+              const nextRow = rows[i+1];
+              if (nextRow) {
+                for (let cc = c; cc <= c+2 && cc < nextRow.length; cc++) {
+                  const v = num(nextRow[cc]);
+                  if (v > 0) { prevMonth = v; break; }
+                }
+              }
+              break;
+            }
+            if (cell.includes('سيارات الشهر الماضي') || cell.includes('سيارات افتتاحية')) {
+              const nextRow = rows[i+1];
+              if (nextRow) {
+                for (let cc = c; cc <= c+2 && cc < nextRow.length; cc++) {
+                  const v = num(nextRow[cc]);
+                  if (v > 0) { carsPrev = v; break; }
+                }
+              }
+              break;
+            }
+          }
+        }
+
+        // Helper: check if a cell value is a formula string (starts with =)
+        const isFormula = v => typeof v === 'string' && v.trim().startsWith('=');
+        // Calculate cars from qty using ROUNDUP(qty/37000, 0) — same as Excel formula
+        const carsFromQty = qty => qty > 0 ? Math.ceil(qty / 37000) : 0;
+
+        // Detect if cars columns are formula-based by sampling first data rows
+        let cars_in_is_formula = false, cars_out_is_formula = false;
+        for (let i = dataStart; i < Math.min(dataStart + 5, rows.length); i++) {
+          const rv = rows[i];
+          if (rv[col_cars_in] !== null && rv[col_cars_in] !== undefined) {
+            cars_in_is_formula = isFormula(rv[col_cars_in]); break;
+          }
+        }
+        for (let i = dataStart; i < Math.min(dataStart + 5, rows.length); i++) {
+          const rv = rows[i];
+          if (rv[col_cars_out] !== null && rv[col_cars_out] !== undefined) {
+            cars_out_is_formula = isFormula(rv[col_cars_out]); break;
+          }
+        }
+
+        const newRows = [];
+        for (let i = dataStart; i < rows.length; i++) {
+          const r = rows[i];
+          if (!r[0] && !r[1]) continue;
+          const idxVal = num(r[0]);
+          if (!idxVal || isNaN(idxVal) || idxVal <= 0) continue;
+
+          const dateStr = parseDate(r[1]);
+          if (!dateStr) continue;
+
+          const qty_in   = num(r[col_qty_in]);
+          const qty_out  = num(r[col_qty_out]);
+          // If cars column contains formulas, compute from qty; otherwise read directly
+          const cars_in  = cars_in_is_formula  ? carsFromQty(qty_in)  : num(r[col_cars_in]);
+          const cars_out = cars_out_is_formula ? carsFromQty(qty_out) : num(r[col_cars_out]);
+          const notes    = String(r[col_notes] || '').trim();
+
+          newRows.push({ idx: idxVal, date: dateStr, cars_in, qty_in, cars_out, qty_out, notes });
+        }
+
+        if (newRows.length > 0) {
+          data[factoryId] = { prevMonth, cars_prev: carsPrev, rows: newRows };
+          imported++;
+        }
+      });
+
+      if (imported === 0) {
+        showToast('⚠️ لم يُعثر على بيانات قابلة للاستيراد في الملف', 'error');
+        return;
+      }
+
+      showToast(`✅ تم استيراد بيانات ${imported} معمل بنجاح من Excel`, 'success');
+      saveData();
+
+      // Navigate to first date of imported data
+      let firstDate = '';
+      FACTORIES.forEach(f => {
+        const rows = data[f.id]?.rows;
+        if (rows && rows.length > 0 && rows[0].date) {
+          if (!firstDate || rows[0].date < firstDate) firstDate = rows[0].date;
+        }
+      });
+      if (firstDate) selectedDate = firstDate;
+
+      render();
+
+    } catch(err) {
+      console.error(err);
+      showToast('❌ فشل قراءة الملف: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+
+function loadFactories() {
+  try {
+    const saved = localStorage.getItem(FACTORIES_KEY);
+    if (saved) {
+      const arr = JSON.parse(saved);
+      if (Array.isArray(arr) && arr.length > 0) {
+        const seen = {};
+        const deduped = [];
+        arr.forEach(f => { seen[f.id] = f; });
+        arr.forEach(f => { if (seen[f.id] === f) deduped.push(f); });
+        FACTORIES.length = 0;
+        deduped.forEach(f => FACTORIES.push(f));
+      }
+    }
+  } catch(e) {}
+}
+
+function saveFactories() {
+  localStorage.setItem(FACTORIES_KEY, JSON.stringify(FACTORIES));
+  if (window._fbSave) { try { window._fbSave('factories', FACTORIES); } catch(e) {} }
+}
+
+function openManageFactoriesModal() {
+  renderFactoriesList();
+  document.getElementById('factories-modal').style.display = 'flex';
+  document.getElementById('nf-name').value = '';
+  document.getElementById('nf-id').value = '';
+  document.getElementById('nf-color').value = '#3d8ef0';
+  document.getElementById('nf-month').value = '';
+  document.getElementById('nf-prev').value = '0';
+  document.getElementById('nf-error').textContent = '';
+}
+
+function renderFactoriesList() {
+  const el = document.getElementById('factories-list');
+  if (!el) return;
+  if (FACTORIES.length === 0) {
+    el.innerHTML = '<div style="text-align:center;color:#5a7090;padding:20px;font-size:13px;">لا توجد معامل مضافة</div>';
+    return;
+  }
+  el.innerHTML = FACTORIES.map((f, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(100,150,255,0.12);border-radius:12px;margin-bottom:8px;">
+      <span style="width:14px;height:14px;border-radius:50%;background:${f.color};flex-shrink:0;box-shadow:0 0 8px ${f.color}60;"></span>
+      <div style="flex:1;">
+        <div style="color:#dce8ff;font-weight:800;font-size:14px;">${f.name}</div>
+        <div style="color:#5a7090;font-size:11px;">id: ${f.id} • ${f.month}</div>
+      </div>
+      <button onclick="editFactoryColor(${i})" title="تغيير اللون"
+        style="background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.15);border-radius:8px;color:#8ba0c0;font-size:12px;padding:5px 9px;cursor:pointer;">🎨</button>
+      <button onclick="editFactoryName(${i})" title="تعديل الاسم"
+        style="background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.15);border-radius:8px;color:#8ba0c0;font-size:12px;padding:5px 9px;cursor:pointer;">✏️</button>
+      <button onclick="deleteFactory('${f.id}')" title="حذف المعمل"
+        style="background:rgba(240,50,50,0.1);border:1px solid rgba(240,50,50,0.25);border-radius:8px;color:#f05050;font-size:12px;padding:5px 9px;cursor:pointer;">🗑️</button>
+    </div>
+  `).join('');
+}
+
+function editFactoryName(idx) {
+  const f = FACTORIES[idx];
+  const newName = prompt('اسم المعمل الجديد:', f.name);
+  if (newName && newName.trim()) {
+    f.name = newName.trim();
+    saveFactories();
+    renderFactoriesList();
+    render();
+    showToast('✅ تم تعديل اسم المعمل', 'success');
+  }
+}
+
+function editFactoryColor(idx) {
+  const f = FACTORIES[idx];
+  const input = document.createElement('input');
+  input.type = 'color';
+  input.value = f.color;
+  input.onchange = () => {
+    f.color = input.value;
+    saveFactories();
+    renderFactoriesList();
+    render();
+    showToast('✅ تم تغيير لون المعمل', 'success');
+  };
+  input.click();
+}
+
+function addNewFactory() {
+  const name  = document.getElementById('nf-name').value.trim();
+  const id    = document.getElementById('nf-id').value.trim().replace(/\s+/g,'_').toLowerCase();
+  const color = document.getElementById('nf-color').value;
+  const month = document.getElementById('nf-month').value.trim();
+  const prev  = parseInt(document.getElementById('nf-prev').value) || 0;
+  const errEl = document.getElementById('nf-error');
+
+  if (!name) { errEl.textContent = '⚠️ يرجى إدخال اسم المعمل'; return; }
+  if (!id)   { errEl.textContent = '⚠️ يرجى إدخال المعرف الفريد'; return; }
+  if (FACTORIES.find(f => f.id === id)) { errEl.textContent = '⚠️ هذا المعرف مستخدم بالفعل'; return; }
+  if (FACTORIES.find(f => f.name.trim() === name)) { errEl.textContent = '⚠️ يوجد معمل بنفس الاسم بالفعل'; return; }
+  if (!/^[a-zA-Z0-9_]+$/.test(id)) { errEl.textContent = '⚠️ المعرف يجب أن يحتوي على حروف انجليزية وأرقام فقط'; return; }
+
+  errEl.textContent = '';
+  FACTORIES.push({ id, name, color, month: month || 'الشهر الحالي' });
+  if (!data[id]) data[id] = { prevMonth: prev, rows: [] };
+  saveFactories();
+  saveData();
+  renderFactoriesList();
+  render();
+  document.getElementById('nf-name').value = '';
+  document.getElementById('nf-id').value = '';
+  document.getElementById('nf-month').value = '';
+  document.getElementById('nf-prev').value = '0';
+  showToast(`✅ تمت إضافة ${name} بنجاح`, 'success');
+}
+
+function deleteFactory(fid) {
+  const f = FACTORIES.find(x => x.id === fid);
+  if (!f) return;
+  if (!confirm(`هل تريد حذف "${f.name}" وجميع بياناته؟ لا يمكن التراجع.`)) return;
+  requirePass(() => {
+    const idx = FACTORIES.findIndex(x => x.id === fid);
+    if (idx > -1) FACTORIES.splice(idx, 1);
+    delete data[fid];
+    saveFactories();
+    saveData();
+    if (activeTab === fid) activeTab = 'all';
+    renderFactoriesList();
+    render();
+    showToast(`🗑️ تم حذف ${f.name}`, 'success');
+  }, '🔐 تأكيد الحذف', 'أدخل رمز السر لحذف المعمل');
+}
+
+
+let lockAttempts = 0;
+const MAX_ATTEMPTS = 5;
+
+
+function toggleLockVis() {
+  const inp = document.getElementById('lock-input');
+  const btn = document.getElementById('lock-vis-btn');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    inp.style.letterSpacing = '2px';
+    btn.textContent = '🙈';
+  } else {
+    inp.type = 'password';
+    inp.style.letterSpacing = '8px';
+    btn.textContent = '👁️';
+  }
+}
+
+function emergencyReset() {
+  if (confirm('⚠️ هل تريد حذف رمز السر نهائياً والدخول؟\nسيتم مسح رمز السر فقط، البيانات لن تُمسح.')) {
+    localStorage.removeItem('khazanati_pass');
+    hideLockScreen();
+    showToast('✅ تم حذف رمز السر. يمكنك تعيين رمز جديد من القائمة.', 'success');
+  }
+}
+
+function showLockScreen() {
+  const ls = document.getElementById('lock-screen');
+  ls.style.display = 'flex';
+  setTimeout(() => document.getElementById('lock-input').focus(), 200);
+}
+
+function hideLockScreen() {
+  document.getElementById('lock-screen').style.display = 'none';
+}
+
+function confirmLock() {
+  if (window.VIEW_ONLY) { hideLockScreen(); return; }
+  const val = document.getElementById('lock-input').value;
+  const stored = getPassword();
+  if (!stored) { hideLockScreen(); return; } // no password set
+  if (val === stored) {
+    lockAttempts = 0;
+    hideLockScreen();
+    document.getElementById('lock-input').value = '';
+    document.getElementById('lock-error').textContent = '';
+  } else {
+    lockAttempts++;
+    const rem = MAX_ATTEMPTS - lockAttempts;
+    document.getElementById('lock-error').textContent = '❌ رمز السر غير صحيح';
+    document.getElementById('lock-input').value = '';
+    document.getElementById('lock-input').focus();
+    if (rem > 0 && rem <= 3) {
+      document.getElementById('lock-attempts').textContent = `⚠️ تبقى ${rem} محاولة`;
+    } else if (lockAttempts >= MAX_ATTEMPTS) {
+      document.getElementById('lock-attempts').textContent = '🔒 تم تجاوز عدد المحاولات — يرجى الانتظار';
+      document.getElementById('lock-input').disabled = true;
+      setTimeout(() => {
+        lockAttempts = 0;
+        document.getElementById('lock-input').disabled = false;
+        document.getElementById('lock-attempts').textContent = '';
+        document.getElementById('lock-input').focus();
+      }, 30000);
+    }
+  }
+}
+
+
+// ════════════════════════════════════════════════
+// RECOVERY CODE SYSTEM
+// ════════════════════════════════════════════════
+const RECOVERY_KEY = 'khazanati_recovery';
+let recoveryVerified = false; // true after user enters correct recovery code
+
+function getRecoveryCode() {
+  return localStorage.getItem(RECOVERY_KEY) || '';
+}
+
+function openRecoveryModal() {
+  recoveryVerified = false;
+  document.getElementById('rec-input').value = '';
+  document.getElementById('rec-newpass').value = '';
+  document.getElementById('rec-error').textContent = '';
+  document.getElementById('rec-newpass-wrap').style.display = 'none';
+  document.getElementById('rec-title').textContent = 'استرداد كلمة السر';
+  document.getElementById('rec-desc').textContent = 'أدخل رمز الاسترداد السري لإعادة تعيين كلمة السر';
+  document.getElementById('rec-input').style.display = '';
+
+  if (!getRecoveryCode()) {
+    document.getElementById('rec-error').innerHTML = '⚠️ لم يتم تعيين رمز استرداد.<br><button onclick="emergencyReset()" style="margin-top:10px;padding:10px 20px;background:rgba(240,50,50,0.2);border:1px solid rgba(240,80,80,0.5);border-radius:10px;color:#f05050;font-family:Tajawal,sans-serif;font-size:13px;font-weight:700;cursor:pointer;width:100%;">🚨 إعادة تعيين الرمز طارئ (حذف الرمز)</button>';
+    document.getElementById('rec-input').style.display = 'none';
+    document.getElementById('recovery-modal').style.display = 'flex';
+    return;
+  }
+
+  document.getElementById('recovery-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('rec-input').focus(), 100);
+}
+
+function closeRecoveryModal() {
+  recoveryVerified = false;
+  document.getElementById('recovery-modal').style.display = 'none';
+}
+
+function confirmRecovery() {
+  if (!recoveryVerified) {
+    // Step 1: verify recovery code
+    const val = document.getElementById('rec-input').value;
+    if (!val) { document.getElementById('rec-error').textContent = '⚠️ يرجى إدخال رمز الاسترداد'; return; }
+    if (val !== getRecoveryCode()) {
+      document.getElementById('rec-error').textContent = '❌ رمز الاسترداد غير صحيح';
+      document.getElementById('rec-input').value = '';
+      document.getElementById('rec-input').focus();
+      return;
+    }
+    // Correct — show new password field
+    recoveryVerified = true;
+    document.getElementById('rec-error').textContent = '';
+    document.getElementById('rec-input').style.display = 'none';
+    document.getElementById('rec-desc').textContent = '';
+    document.getElementById('rec-newpass-wrap').style.display = 'block';
+    setTimeout(() => document.getElementById('rec-newpass').focus(), 100);
+  } else {
+    // Step 2: set new password
+    const newPass = document.getElementById('rec-newpass').value;
+    if (!newPass || newPass.length < 4) {
+      document.getElementById('rec-error').textContent = '⚠️ كلمة السر يجب أن تكون 4 أحرف على الأقل';
+      document.getElementById('rec-error').style.height = 'auto';
+      return;
+    }
+    localStorage.setItem(PASS_KEY, newPass);
+    recoveryVerified = false;
+    document.getElementById('recovery-modal').style.display = 'none';
+    hideLockScreen();
+    showToast('✅ تم إعادة تعيين كلمة السر بنجاح', 'success');
+  }
+}
+
+function openSetRecoveryModal() {
+  requirePass(() => {
+    const current = getRecoveryCode();
+    document.getElementById('srec-input').value = current;
+    document.getElementById('srec-error').textContent = '';
+    document.getElementById('set-recovery-modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('srec-input').focus(), 100);
+  }, '🔐 رمز السر مطلوب', 'أدخل رمز السر لتعيين رمز الاسترداد');
+}
+
+function saveRecoveryCode() {
+  const val = document.getElementById('srec-input').value.trim();
+  if (!val || val.length < 3) {
+    document.getElementById('srec-error').textContent = '⚠️ الرمز يجب أن يكون 3 أحرف على الأقل';
+    return;
+  }
+  localStorage.setItem(RECOVERY_KEY, val);
+  document.getElementById('set-recovery-modal').style.display = 'none';
+  showToast('✅ تم حفظ رمز الاسترداد بنجاح', 'success');
+}
+
+
+let toastTimer;
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type + ' show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+
+// ════════════════════════════════════════════════
+// MONTHLY SAVE & NEW MONTH
+// ════════════════════════════════════════════════
+function getSavedMonths() {
+  try { return JSON.parse(localStorage.getItem(MONTHS_KEY) || '{}'); } catch(e) { return {}; }
+}
+
+function saveCurrentMonth(monthKey) {
+  const months = getSavedMonths();
+  months[monthKey] = JSON.parse(JSON.stringify(data));
+  localStorage.setItem(MONTHS_KEY, JSON.stringify(months));
+  if (window._fbSave) { try { window._fbSave('months', months); } catch(e) {} }
+}
+
+function openNewMonthModal() {
+  requirePass(() => {
+    // Compute next month from current data
+    const now = new Date();
+    let yr = now.getFullYear();
+    let mo = now.getMonth() + 2; // next month
+    if (mo > 12) { mo = 1; yr++; }
+    document.getElementById('new-month-year').value = yr;
+    document.getElementById('new-month-num').value = String(mo).padStart(2,'0');
+    updateMonthPreview();
+    document.getElementById('month-modal').style.display = 'flex';
+  }, '🔐 رمز السر مطلوب', 'فتح شهر جديد يتطلب رمز السر');
+}
+
+function updateMonthPreview() {
+  const yr = document.getElementById('new-month-year').value;
+  const mo = document.getElementById('new-month-num').value;
+  const monthNames = ['','يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  const prev = document.getElementById('month-preview');
+  let html = `<div style="color:#f0b830;font-size:13px;font-weight:700;margin-bottom:10px;">شهر: ${monthNames[parseInt(mo)]} ${yr}</div>`;
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+  FACTORIES.forEach(f => {
+    const rem = Math.max(0, getCumulative(f.id, '9999-12-31'));
+    const carsRem = Math.max(0, (data[f.id]?.cars_prev || 0) + getTotalCarsIn(f.id, '9999-12-31') - getTotalCarsOut(f.id, '9999-12-31'));
+    html += `<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 12px;">
+      <span style="font-size:11px;color:#5a7090;">${f.name}</span><br>
+      <span style="font-size:13px;font-weight:700;color:#20d070;">افتتاحي: ${fmt(rem)} طن</span><br>
+      <span style="font-size:12px;color:#3d8ef0;">🚛 ${fmt(carsRem)} سيارة</span>
+    </div>`;
+  });
+  html += '</div>';
+  prev.innerHTML = html;
+}
+
+function confirmNewMonth() {
+  const yr = document.getElementById('new-month-year').value;
+  const mo = document.getElementById('new-month-num').value;
+  if (!yr || !mo) return;
+  const monthKey = `${yr}-${mo}`;
+
+  // Archive current month
+  const curMonthKey = getCurrentMonthKey();
+  saveCurrentMonth(curMonthKey);
+
+  // Build new month data — prevMonth = current remaining
+  const newData = {};
+  FACTORIES.forEach(f => {
+    const rem = Math.max(0, getCumulative(f.id, '9999-12-31'));
+    const carsRem = Math.max(0, (data[f.id]?.cars_prev || 0) + getTotalCarsIn(f.id, '9999-12-31') - getTotalCarsOut(f.id, '9999-12-31'));
+    newData[f.id] = { prevMonth: rem, cars_prev: carsRem, rows: [] };
+  });
+
+  // Update FACTORIES month label
+  const monthNames = ['','يناير','فبراير','مارس','أبريل / نيسان','مايو / أيار','يونيو / حزيران','يوليو / تموز','أغسطس / آب','سبتمبر / أيلول','أكتوبر / تشرين أول','نوفمبر / تشرين ثاني','ديسمبر / كانون'];
+  FACTORIES.forEach(f => { f.month = `${monthNames[parseInt(mo)]} ${yr}`; });
+
+  data = newData;
+  saveData();
+
+  // Go to first day of new month
+  selectedDate = `${yr}-${mo}-01`;
+
+  document.getElementById('month-modal').style.display = 'none';
+  render();
+  updatePageTitle();
+  showToast(`✅ تم فتح شهر ${monthNames[parseInt(mo)]} ${yr} بنجاح`, 'success');
+}
+
+function getCurrentMonthKey() {
+  // Derive from the LATEST date across all factories
+  let latest = '';
+  for (const f of FACTORIES) {
+    const rows = data[f.id]?.rows;
+    if (rows && rows.length > 0) {
+      const last = rows[rows.length - 1].date;
+      if (last > latest) latest = last;
+    }
+  }
+  if (latest) return latest.slice(0, 7);
+  return new Date().toISOString().slice(0,7);
+}
+
+// ════════════════════════════════════════════════
+// OPENING BALANCE
+// ════════════════════════════════════════════════
+function openOpeningModal() {
+  requirePass(() => {
+    let html = '';
+    FACTORIES.forEach(f => {
+      const prev = data[f.id]?.prevMonth || 0;
+      const carsPrev = data[f.id]?.cars_prev || 0;
+      html += `<div style="margin-bottom:16px;padding:12px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(100,150,255,0.1);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span class="fp-dot" style="background:${f.color};color:${f.color};width:10px;height:10px;border-radius:50%;flex-shrink:0;display:inline-block;box-shadow:0 0 6px ${f.color}"></span>
+          <span style="font-size:14px;font-weight:700;color:#dce8ff;">${f.name}</span>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <div style="flex:1;">
+            <label style="font-size:11px;color:#5a7090;display:block;margin-bottom:4px;">⚖️ الكمية الافتتاحية (طن)</label>
+            <input type="number" id="op_${f.id}" value="${prev}" min="0"
+              style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.2);border-radius:10px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:14px;padding:8px 12px;outline:none;text-align:left;">
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:11px;color:#5a7090;display:block;margin-bottom:4px;">🚛 سيارات الشهر الماضي</label>
+            <input type="number" id="op_cars_${f.id}" value="${carsPrev}" min="0"
+              style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(100,150,255,0.2);border-radius:10px;color:#dce8ff;font-family:'Tajawal',sans-serif;font-size:14px;padding:8px 12px;outline:none;text-align:left;">
+          </div>
+        </div>
+      </div>`;
+    });
+    document.getElementById('opening-fields').innerHTML = html;
+    document.getElementById('opening-modal').style.display = 'flex';
+  }, '🔐 رمز السر مطلوب', 'تعديل الافتتاحي يتطلب رمز السر');
+}
+
+function saveOpeningBalances() {
+  FACTORIES.forEach(f => {
+    const val = parseInt(document.getElementById('op_' + f.id)?.value) || 0;
+    const carsVal = parseInt(document.getElementById('op_cars_' + f.id)?.value) || 0;
+    if (data[f.id]) {
+      data[f.id].prevMonth = val;
+      data[f.id].cars_prev = carsVal;
+    }
+  });
+  saveData();
+  document.getElementById('opening-modal').style.display = 'none';
+  render();
+  showToast('✅ تم حفظ الأرصدة الافتتاحية', 'success');
+}
+
+// ════════════════════════════════════════════════
+// PAGE TITLE UPDATE
+// ════════════════════════════════════════════════
+function updatePageTitle() {
+  const saved = JSON.parse(localStorage.getItem(TITLE_KEY) || 'null');
+  const mainTitle = saved?.main || document.getElementById('system-title')?.textContent || 'خزاناتي';
+  const monthKey = getCurrentMonthKey();
+  if (!monthKey) return;
+  const [yr, mo] = monthKey.split('-');
+  const monthNames = ['','يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  const title = `${mainTitle} — ${monthNames[parseInt(mo)]} ${yr}`;
+  document.title = title;
+  const el = document.getElementById('page-title');
+  if (el) el.textContent = title;
+}
+
+// ════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  loadFactories();
+  loadData();
+  loadSystemTitle();
+  // Default: open all factory panels
+  FACTORIES.forEach(f => { openPanels[f.id] = true; });
+  render();
+  updatePageTitle();
+  // ── وضع المشاهدة فقط ──
+  const urlParams = new URLSearchParams(window.location.search);
+  window.VIEW_ONLY = urlParams.get('view') === '1';
+
+  if (window.VIEW_ONLY) {
+    // ── وضع المشاهدة: إخفاء كل شيء فوراً ──
+    document.body.classList.add('view-only-mode');
+
+    // إغلاق أي نافذة مفتوحة
+    ['lock-screen','pass-modal','factories-modal','month-modal',
+     'opening-modal','edit-title-modal','recovery-modal','set-recovery-modal']
+      .forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+
+    // إخفاء شامل لكل أزرار التعديل
+    setTimeout(() => {
+      // شريط التصدير كاملاً
+      document.querySelectorAll('.export-bar, .entry-panel').forEach(el => el.style.display = 'none');
+      // كل الأزرار التي تحتوي دوال التعديل
+      document.querySelectorAll('button').forEach(btn => {
+        const oc = btn.getAttribute('onclick') || '';
+        const forbidden = ['toggleEntry','saveEntry','clearEntry','openEdit','openChange',
+          'openFactory','openMonth','openSet','openRecovery','openOpening','openManage',
+          'openNewMonth','openChangePass','addNew','deleteFactory','printPDF',
+          'exportExcel','importExcel','saveDailySummaryPDF'];
+        if (forbidden.some(f => oc.includes(f))) {
+          btn.style.display = 'none';
+          btn.disabled = true;
+        }
+      });
+      // إخفاء زر "✏️ تسجيل" في كل معمل
+      document.querySelectorAll('.fp-header .nav-btn').forEach(b => b.style.display = 'none');
+    }, 200);
+
+    // شارة "مشاهدة فقط"
+    const badge = document.createElement('div');
+    badge.style.cssText = 'position:fixed;top:12px;left:12px;background:rgba(255,160,0,0.15);border:1px solid rgba(255,160,0,0.4);border-radius:20px;padding:5px 14px;font-size:13px;color:#ffb020;z-index:9998;font-family:Tajawal,sans-serif;pointer-events:none;';
+    badge.textContent = '👁️ مشاهدة فقط';
+    document.body.appendChild(badge);
+
+  } else {
+    // وضع المشرف - يحتاج رمز السر
+    if (getPassword()) {
+      showLockScreen();
+    }
+  }
+  // Set print footer date
+  const el = document.getElementById('print-date-footer');
+  if (el) el.textContent = new Date().toLocaleDateString('ar-IQ', {year:'numeric',month:'long',day:'numeric'});
+  // month-modal listeners
+  document.getElementById('new-month-year').addEventListener('change', updateMonthPreview);
+  document.getElementById('new-month-num').addEventListener('change', updateMonthPreview);
+  // Protect save/clear entry with password
+  document.querySelectorAll('.btn-save').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      if (getPassword()) { e.stopImmediatePropagation(); }
+    }, true);
+  });
+});
+</script>
+</body>
+</html>
